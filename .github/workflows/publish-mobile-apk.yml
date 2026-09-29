@@ -15,9 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      ARTIFACT_ID: "11049969454"
-      RELEASE_TAG: "mobile-app-v0.1"
-      APK_NAME: "AI-Video-Mobile-v0.1.apk"
+      ARTIFACT_ID: "11053283536"
+      RELEASE_TAG: "mobile-app-v0.2"
+      APK_NAME: "AI-Video-Mobile-v0.2.apk"
 
     steps:
       - uses: actions/checkout@v4
@@ -46,7 +46,7 @@ jobs:
         run: |
           APK_SHA=$(cut -d' ' -f1 apk-sha256.txt)
           cat > release-notes.md <<EOF
-          AI Video Mobile v0.1
+          AI Video Mobile v0.2
 
           Android app for local MobileI2V Image-to-Video generation.
 
@@ -61,7 +61,11 @@ jobs:
 
           APK SHA-256: $APK_SHA
 
-          After installing the APK, tap "Скачать модель 1.7 ГБ".
+          After installing the APK:
+- the old v0.1 model pack is treated as outdated;
+- tap "Скачать модель 1.7 ГБ";
+- the app downloads and verifies MobileI2V model pack v0.2;
+- then select an image and create video locally.
           EOF
 
       - name: Create or update prerelease
@@ -73,13 +77,13 @@ jobs:
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "$APK_NAME" --clobber
             gh release edit "$RELEASE_TAG" \
-              --title "AI Video Mobile v0.1" \
+              --title "AI Video Mobile v0.2" \
               --notes-file release-notes.md \
               --prerelease
           else
             gh release create "$RELEASE_TAG" \
               "$APK_NAME" \
-              --title "AI Video Mobile v0.1" \
+              --title "AI Video Mobile v0.2" \
               --notes-file release-notes.md \
               --prerelease \
               --target "mobile-android-v1"
