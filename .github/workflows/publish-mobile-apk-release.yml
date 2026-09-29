@@ -1,0 +1,59 @@
+name: Publish Mobile APK Release
+
+on:
+  push:
+    branches:
+      - mobile-apk-release-publish
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      APK_ARTIFACT_ID: "11049969454"
+      RELEASE_TAG: "mobile-model-v0.1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download successful APK artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$APK_ARTIFACT_ID/zip" \
+            -o apk-artifact.zip
+          mkdir -p apk-artifact
+          unzip -q apk-artifact.zip -d apk-artifact
+          test -f apk-artifact/app-debug.apk
+          cp apk-artifact/app-debug.apk ai-video-mobile-v0.1-debug.apk
+          sha256sum ai-video-mobile-v0.1-debug.apk
+          ls -lh ai-video-mobile-v0.1-debug.apk
+
+      - name: Upload APK to existing release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" \
+            ai-video-mobile-v0.1-debug.apk \
+            --clobber
+
+      - name: Verify release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$RELEASE_TAG" \
+            --json url,assets
