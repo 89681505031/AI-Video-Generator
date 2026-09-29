@@ -1,0 +1,79 @@
+name: Publish MobileI2V Model Pack Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - publish-mobile-model-pack
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download successful model-pack artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mobile-i2v-512-base30-turbo
+          path: release
+          github-token: ${{ github.token }}
+          repository: 89681505031/AI-Video-Generator
+          run-id: 36603101825
+
+      - name: Verify release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASSET="release/mobile_i2v_v1_512_base30_turbo.zip"
+          test -f "$ASSET"
+          ls -lh "$ASSET"
+          sha256sum "$ASSET"
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="mobile-model-pack-v1.0"
+          ASSET="release/mobile_i2v_v1_512_base30_turbo.zip"
+
+          NOTES=$(cat <<'EOF'
+MobileI2V Android model pack v1.
+
+- 512×512
+- 17 frames
+- base MobileI2V checkpoint
+- 30 FlowEuler steps
+- Turbo-VAED-LTX decoder
+- Android pack format v4
+- prompt is not used by the current official MobileI2V graph
+
+This is the first phone-ready model pack for the Android mobile branch.
+EOF
+          )
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ASSET" --clobber
+          else
+            gh release create "$TAG" "$ASSET" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "mobile-android-v1" \
+              --title "MobileI2V Android Model Pack v1" \
+              --notes "$NOTES" \
+              --prerelease
+          fi
+
+      - name: Show release URL
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view mobile-model-pack-v1.0 \
+            --repo "$GITHUB_REPOSITORY" \
+            --json url,assets
