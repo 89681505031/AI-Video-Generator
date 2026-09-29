@@ -1,21 +1,20 @@
-# MobileI2V model pack v2
+# MobileI2V model pack
 
 Pack ID: `mobile_i2v_v1`
+Format version: **3**
 
-The Android app keeps large neural-network weights outside the APK and loads ONNX sessions one stage at a time.
+The Android app keeps large neural-network weights outside the APK. A pack is
+installed only after runtime metadata and every SHA-256 pass validation.
 
-## Lite Image → Video core
-
-Required at ZIP root:
+## Core files
 
 - `vae_encoder.onnx`
 - `mobilei2v_transformer.onnx`
 - `video_decoder.onnx`
-- `null_condition.bin`
+- `null_condition.bin` — FP16 `[1,1,300,896]`
+- `null_attention_mask.bin` — uint8 `[300]`
 - `runtime.json`
 - `manifest.json`
-
-For the first phone build, Qwen2 is optional. `null_condition.bin` stores the FP16 empty-prompt conditioning tensor with shape `[1,1,300,896]`. This lets Lite I2V skip the Qwen2 model entirely and reduce storage and peak RAM.
 
 ## Optional text extension
 
@@ -26,78 +25,48 @@ When `runtime.json` has `"text_conditioning": true`, also include:
 - `tokenizer_config.json`
 - `special_tokens_map.json`
 
-## Official runtime contract
+Lite mode uses the precomputed empty-prompt conditioning and mask, so Qwen2 is
+not loaded on the phone.
 
-The upstream MobileI2V configuration/code uses:
+## Runtime contract
 
-- model: `Mobiledit_300M_P1_D16` (MobileDiT, not a UNet)
-- 17 video frames
+Verified upstream values:
+
+- 17 output frames
 - 128 latent channels
-- video VAE spatial downsample ×32
-- temporal latent count `17 // 8 + 1 = 3`
-- Qwen2-0.5B conditioning
-- max text length 300
+- spatial VAE downsample ×32
+- 3 temporal latent slices
+- text max length 300
 - caption channels 896
+- FlowMatchEuler shift 3.0
+- VAE scale factor 0.41407
 
-At 512×512 the noisy video latent is `[B,128,3,16,16]`.
+720p uses latent `[1,128,3,23,40]`; 512×512 uses
+`[1,128,3,16,16]`.
 
-The denoiser forward contract is conceptually:
-
-```
-model(
-  x,
-  timestep,
-  guide_image,
-  y,
-  cond_mask,
-  flow_score,
-  mask,
-  data_info
-) -> noise_prediction
-```
-
-## runtime.json
-
-Example BASE Lite profile:
+## manifest.json
 
 ```json
 {
-  "variant": "base",
-  "width": 512,
-  "height": 512,
-  "frames": 17,
-  "latent_channels": 128,
-  "vae_downsample_rate": 32,
-  "temporal_latents": 3,
-  "sampling_steps": 30,
-  "text_conditioning": false,
-  "text_max_length": 300,
-  "caption_channels": 896,
-  "source_commit": "8d0a253c766b05a43ba408baf5e8f800a36be8b4"
+  "pack_id": "mobile_i2v_v1",
+  "format_version": 3,
+  "files": {
+    "vae_encoder.onnx": "<sha256>",
+    "mobilei2v_transformer.onnx": "<sha256>",
+    "video_decoder.onnx": "<sha256>",
+    "null_condition.bin": "<sha256>",
+    "null_attention_mask.bin": "<sha256>",
+    "runtime.json": "<sha256>"
+  }
 }
 ```
 
-`variant` is either `base` or `distilled`. The app refuses a pack that labels itself distilled while declaring more than four sampling steps.
+Every core file except `manifest.json` itself must appear in `files`.
 
-## BASE vs DISTILLED
+## Packaging
 
-The official Hugging Face model repository publishes the base `hybrid_371.pth` checkpoint (~1.07 GB). The upstream distillation branch publishes training code/configuration, but its instructions do not currently point to a separately named pretrained distilled-student checkpoint.
+After exporting the ONNX graphs and creating `runtime.json`:
 
-The Android app therefore keeps BASE and DISTILLED distinct instead of treating the public base checkpoint as the two-step model.
+`python tools/package_mobile_model.py /path/to/model_dir --out mobile_i2v_v1.zip`
 
-## Integrity
-
-`manifest.json` contains SHA-256 for every runtime file. Installation happens in a temporary app-private directory. ZIP traversal is blocked, metadata is validated, every declared SHA-256 is checked, then the pack is atomically activated.
-
-Create a pack after conversion with:
-
-```bash
-python tools/package_mobile_model.py /path/to/exported_model --out mobile_i2v_v1.zip
-```
-
-## RAM strategy
-
-- open one ONNX stage at a time via `StagedOrtRunner`
-- unload the stage before opening the next large graph
-- feed decoded frames directly to `H264Mp4Encoder`
-- avoid keeping the whole uncompressed 17-frame clip in Java memory
+The packager writes format version 3 and all SHA-256 values.

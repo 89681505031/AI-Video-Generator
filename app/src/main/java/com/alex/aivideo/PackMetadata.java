@@ -129,6 +129,33 @@ public final class PackMetadata {
             );
         }
 
+        File nullMask = new File(dir, "null_attention_mask.bin");
+        byte[] maskBytes = readAll(
+                nullMask,
+                MobileI2VContract.TEXT_MAX_TOKENS
+        );
+        if (maskBytes.length != MobileI2VContract.TEXT_MAX_TOKENS) {
+            throw new IllegalArgumentException(
+                    "null_attention_mask.bin должен содержать ровно "
+                            + MobileI2VContract.TEXT_MAX_TOKENS + " байт."
+            );
+        }
+        int activeTokens = 0;
+        for (byte value : maskBytes) {
+            int unsigned = value & 0xff;
+            if (unsigned != 0 && unsigned != 1) {
+                throw new IllegalArgumentException(
+                        "null_attention_mask.bin должен содержать только 0/1."
+                );
+            }
+            if (unsigned == 1) activeTokens++;
+        }
+        if (activeTokens == 0) {
+            throw new IllegalArgumentException(
+                    "null_attention_mask.bin не содержит активных токенов."
+            );
+        }
+
         return new PackMetadata(
                 variant, width, height, frames, latentChannels, vaeDownsampleRate,
                 temporalLatents, samplingSteps, textConditioning, textMaxLength,

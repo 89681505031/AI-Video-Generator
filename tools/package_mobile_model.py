@@ -54,7 +54,7 @@ def main() -> None:
     files = {name: sha256(model_dir / name) for name in required}
     manifest = {
         "pack_id": PACK_ID,
-        "format_version": 2,
+        "format_version": 3,
         "files": files,
     }
 

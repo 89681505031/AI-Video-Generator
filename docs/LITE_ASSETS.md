@@ -1,14 +1,28 @@
 # MobileI2V Lite assets
 
-The Lite Android profile avoids loading Qwen2-0.5B on the phone.
+Lite mode avoids loading Qwen2-0.5B on the phone while preserving the
+conditioning tensors used by upstream MobileI2V.
 
-`tools/generate_null_condition.py` follows the upstream MobileI2V empty-prompt path and writes:
+`tools/generate_null_condition.py` writes:
 
-- `null_condition.bin` — raw little-endian FP16 tensor, shape `[1,1,300,896]`
-- `null_condition.info.json` — source revision, shape, byte count and SHA-256
+- `null_condition.bin` — little-endian FP16, shape `[1,1,300,896]`,
+  exactly **537600 bytes**
+- `null_attention_mask.bin` — uint8 0/1 mask, shape `[300]`,
+  exactly **300 bytes**
+- `null_condition.info.json` — pinned source revision, active-token count,
+  sizes and SHA-256 values
 
-Expected binary size: **537600 bytes**.
+Both neural conditioning and attention mask come from the same tokenization of
+the empty prompt. Keeping the mask matters because MobileDiT removes padded
+text tokens before cross-attention.
 
-The GitHub Actions workflow `Mobile Lite Model Assets` is manual because downloading Qwen2 and computing this deterministic asset does not need to happen for every Android build.
+The workflow `Mobile Lite Model Assets` regenerates and verifies these files
+when the generator changes.
 
-The script pins the base model `Qwen/Qwen2-0.5B` at revision `91d2aff`; it does not use the Instruct variant.
+Pinned source:
+
+- model: `Qwen/Qwen2-0.5B`
+- revision: `91d2aff`
+- max length: 300
+- hidden size: 896
+- tokenizer padding: right

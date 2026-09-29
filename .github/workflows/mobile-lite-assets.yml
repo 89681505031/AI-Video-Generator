@@ -32,11 +32,13 @@ jobs:
           HF_HUB_DISABLE_TELEMETRY: "1"
         run: python tools/generate_null_condition.py
 
-      - name: Verify exact size
+      - name: Verify exact assets
         shell: bash
         run: |
           test "$(stat -c%s build/mobile-lite-assets/null_condition.bin)" = "537600"
+          test "$(stat -c%s build/mobile-lite-assets/null_attention_mask.bin)" = "300"
           sha256sum build/mobile-lite-assets/null_condition.bin
+          sha256sum build/mobile-lite-assets/null_attention_mask.bin
           cat build/mobile-lite-assets/null_condition.info.json
 
       - name: Upload Lite asset
@@ -45,5 +47,6 @@ jobs:
           name: mobilei2v-null-condition
           path: |
             build/mobile-lite-assets/null_condition.bin
+            build/mobile-lite-assets/null_attention_mask.bin
             build/mobile-lite-assets/null_condition.info.json
           if-no-files-found: error
