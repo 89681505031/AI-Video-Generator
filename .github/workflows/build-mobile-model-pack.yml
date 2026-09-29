@@ -45,6 +45,7 @@ jobs:
             pyrallis==0.3.1 \
             omegaconf==2.3.0 \
             termcolor==3.1.0 \
+            pytz==2026.2 \
             addict==2.4.0 \
             yapf==0.43.0 \
             onnx==1.17.0 \
