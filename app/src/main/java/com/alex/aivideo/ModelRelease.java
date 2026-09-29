@@ -11,15 +11,15 @@ import java.security.MessageDigest;
 
 public final class ModelRelease {
     public static final String FILE_NAME =
-            "mobile_i2v_v1_512_base30_turbo.zip";
+            "mobile_i2v_v2_512_base30_turbo.zip";
 
     public static final String DOWNLOAD_URL =
             "https://github.com/89681505031/AI-Video-Generator/"
-                    + "releases/download/mobile-model-v0.1/"
+                    + "releases/download/mobile-model-v0.2/"
                     + FILE_NAME;
 
     public static final String SHA256 =
-            "b293b0d49d387b24d9b9e791f341df418048bdb89a177b42f05191295309c02b";
+            "f976263fe16a3a9f913cd7fd6b76cb31efbd99c04ce6c9b8d589c7b6c270885d";
 
     public static final long REQUIRED_FREE_BYTES =
             5L * 1024L * 1024L * 1024L;
