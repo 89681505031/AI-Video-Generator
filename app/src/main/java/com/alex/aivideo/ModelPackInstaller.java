@@ -18,7 +18,8 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 public final class ModelPackInstaller {
-    public static final String PACK_ID = "mobile_i2v_v1";\n    public static final int FORMAT_VERSION = 3;
+    public static final String PACK_ID = "mobile_i2v_v1";
+    public static final int FORMAT_VERSION = 3;
 
     public static final String[] CORE_FILES = {
             "vae_encoder.onnx",

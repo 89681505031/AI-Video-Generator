@@ -140,7 +140,6 @@ public final class PackMetadata {
                             + MobileI2VContract.TEXT_MAX_TOKENS + " байт."
             );
         }
-        int activeTokens = 0;
         for (byte value : maskBytes) {
             int unsigned = value & 0xff;
             if (unsigned != 0 && unsigned != 1) {
@@ -148,7 +147,6 @@ public final class PackMetadata {
                         "null_attention_mask.bin должен содержать только 0/1."
                 );
             }
-            if (unsigned == 1) activeTokens++;
         }
         return new PackMetadata(
                 variant, width, height, frames, latentChannels, vaeDownsampleRate,

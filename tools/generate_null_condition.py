@@ -100,6 +100,14 @@ def main() -> None:
     if not np.isin(mask, [0, 1]).all():
         raise RuntimeError("Attention mask must contain only 0/1")
     active_tokens = int(mask.sum())
+    # At the pinned Qwen2-0.5B revision, an empty prompt has a fully-zero
+    # attention mask. This is the exact upstream tokenizer output and must be
+    # preserved rather than "fixed" into a non-empty prompt.
+    if active_tokens != 0:
+        raise RuntimeError(
+            f"Unexpected empty-prompt attention mask: {active_tokens} active tokens"
+        )
+
     mask_path = args.out_dir / "null_attention_mask.bin"
     mask_path.write_bytes(mask.astype("u1", copy=False).tobytes(order="C"))
     if mask_path.stat().st_size != EXPECTED_MASK_BYTES:

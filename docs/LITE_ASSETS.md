@@ -26,3 +26,8 @@ Pinned source:
 - max length: 300
 - hidden size: 896
 - tokenizer padding: right
+
+
+At the pinned Qwen2-0.5B revision, the empty prompt produces an **all-zero**
+300-token attention mask. This is intentional and verified in CI; the Lite
+pack preserves it exactly instead of inventing a synthetic active token.

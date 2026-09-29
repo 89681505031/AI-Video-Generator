@@ -15,6 +15,7 @@ CORE = [
     "mobilei2v_transformer.onnx",
     "video_decoder.onnx",
     "null_condition.bin",
+    "null_attention_mask.bin",
     "runtime.json",
 ]
 TEXT = [
