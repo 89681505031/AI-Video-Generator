@@ -18,6 +18,7 @@ import json
 import os
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import torch
@@ -167,6 +168,41 @@ class VideoDecoderWrapper(torch.nn.Module):
         ]
 
 
+def _install_mobiledit_import_shims(root: Path) -> None:
+    """
+    Import only the official MobileDiT model code needed for ONNX export.
+
+    Upstream diffusion/__init__.py imports schedulers -> builder -> DCAE ->
+    Triton even though MobileDiT export does not use DCAE. The real
+    mobiledit.py only needs MODELS for its registration decorators, so provide
+    a tiny compatible registry shim and preserve the official model sources.
+    """
+    diffusion_root = root / "diffusion"
+
+    package = types.ModuleType("diffusion")
+    package.__path__ = [str(diffusion_root)]
+    package.__package__ = "diffusion"
+    sys.modules["diffusion"] = package
+
+    nets_package = types.ModuleType("diffusion.model.nets")
+    nets_package.__path__ = [str(diffusion_root / "model" / "nets")]
+    nets_package.__package__ = "diffusion.model.nets"
+    sys.modules["diffusion.model.nets"] = nets_package
+
+    class _RegistryShim:
+        def register_module(self, *args, **kwargs):
+            def decorate(obj):
+                return obj
+
+            if len(args) == 1 and callable(args[0]) and not kwargs:
+                return args[0]
+            return decorate
+
+    builder = types.ModuleType("diffusion.model.builder")
+    builder.MODELS = _RegistryShim()
+    sys.modules["diffusion.model.builder"] = builder
+
+
 def build_mobiledit(
     root: Path,
     checkpoint_path: Path,
@@ -176,6 +212,7 @@ def build_mobiledit(
     dtype: torch.dtype,
 ) -> torch.nn.Module:
     sys.path.insert(0, str(root))
+    _install_mobiledit_import_shims(root)
 
     from diffusion.model.nets.mobiledit import Mobiledit_300M_P1_D16  # noqa: E402
 
