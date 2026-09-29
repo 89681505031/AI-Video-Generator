@@ -45,12 +45,12 @@ jobs:
             pyrallis==0.3.1 \
             omegaconf==2.3.0 \
             termcolor==3.1.0 \
-            pytz==2026.2 \
+            pytz==2025.2 \
             addict==2.4.0 \
             yapf==0.43.0 \
             onnx==1.17.0 \
+            onnxruntime==1.20.1 \
             accelerate==1.1.0 \
-            pytz==2025.2 \
             opencv-python-headless==4.12.0.88
           python -m pip install --no-build-isolation mmcv==1.7.2
 
