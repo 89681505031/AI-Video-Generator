@@ -47,7 +47,8 @@ public class MainActivity extends Activity {
         modelPackButton.setOnClickListener(v -> openModelPackPicker());
 
         generateButton.setOnClickListener(v -> {
-            if (!engine.modelPackReady()) {
+            PackMetadata metadata = engine.metadataOrNull();
+            if (metadata == null) {
                 Toast.makeText(
                         this,
                         "Сначала установите проверенный MobileI2V model pack.",
@@ -61,9 +62,13 @@ public class MainActivity extends Activity {
                 return;
             }
 
+            String mode = metadata.variant.equals("distilled")
+                    ? "DISTILLED " + metadata.samplingSteps + "-step"
+                    : "BASE " + metadata.samplingSteps + "-step";
             Toast.makeText(
                     this,
-                    "Входные данные готовы. Следующий блок — подключение реальных tensor I/O MobileI2V.",
+                    mode + " pack и изображение готовы. "
+                            + "Следующий блок — реальные tensor I/O MobileI2V.",
                     Toast.LENGTH_LONG
             ).show();
         });
@@ -113,7 +118,7 @@ public class MainActivity extends Activity {
     }
 
     private void installModelPack(Uri uri) {
-        engineStatus.setText("Проверяю ZIP и SHA-256…");
+        engineStatus.setText("Проверяю ZIP, runtime contract и SHA-256…");
         generateButton.setEnabled(false);
 
         new Thread(() -> {
@@ -173,6 +178,14 @@ public class MainActivity extends Activity {
                 + "\nПапка: " + engine.modelDirectory().getAbsolutePath();
 
         engineStatus.setText(status);
+
+        PackMetadata metadata = engine.metadataOrNull();
+        boolean promptEnabled = metadata != null && metadata.textConditioning;
+        prompt.setEnabled(promptEnabled);
+        prompt.setHint(promptEnabled
+                ? "Опишите движение или сцену..."
+                : "Lite I2V: текст отключён, экономим память телефона");
+
         generateButton.setEnabled(ort);
     }
 }

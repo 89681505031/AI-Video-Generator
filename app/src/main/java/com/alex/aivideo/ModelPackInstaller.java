@@ -13,21 +13,27 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Iterator;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 public final class ModelPackInstaller {
     public static final String PACK_ID = "mobile_i2v_v1";
 
-    public static final String[] REQUIRED_FILES = {
+    public static final String[] CORE_FILES = {
             "vae_encoder.onnx",
+            "mobilei2v_transformer.onnx",
+            "video_decoder.onnx",
+            "null_condition.bin",
+            "runtime.json",
+            "manifest.json"
+    };
+
+    public static final String[] TEXT_FILES = {
             "qwen2_encoder.onnx",
-            "mobilei2v_unet.onnx",
-            "turbo_vaed.onnx",
             "tokenizer.json",
             "tokenizer_config.json",
-            "special_tokens_map.json",
-            "manifest.json"
+            "special_tokens_map.json"
     };
 
     private ModelPackInstaller() {}
@@ -72,6 +78,81 @@ public final class ModelPackInstaller {
         }
     }
 
+    public static PackMetadata validatePack(File dir) throws Exception {
+        File manifestFile = new File(dir, "manifest.json");
+        if (!manifestFile.isFile()) {
+            throw new IllegalArgumentException("В model pack нет manifest.json.");
+        }
+
+        String manifestText = readUtf8(manifestFile);
+        JSONObject manifest = new JSONObject(manifestText);
+        if (!PACK_ID.equals(manifest.optString("pack_id"))) {
+            throw new IllegalArgumentException("Неверный pack_id. Нужен " + PACK_ID + ".");
+        }
+
+        JSONObject files = manifest.optJSONObject("files");
+        if (files == null || files.length() == 0) {
+            throw new IllegalArgumentException("В manifest.json нет объекта files.");
+        }
+
+        for (String name : CORE_FILES) {
+            if (!new File(dir, name).isFile()) {
+                throw new IllegalArgumentException("Не хватает обязательного файла: " + name);
+            }
+        }
+
+        PackMetadata metadata = PackMetadata.load(dir);
+        if (metadata.textConditioning) {
+            for (String name : TEXT_FILES) {
+                if (!new File(dir, name).isFile()) {
+                    throw new IllegalArgumentException("Text pack неполный: " + name);
+                }
+            }
+        }
+
+        Iterator<String> keys = files.keys();
+        while (keys.hasNext()) {
+            String name = keys.next();
+            if (name.contains("/") || name.contains("\\") || name.equals("manifest.json")) {
+                throw new SecurityException("Недопустимое имя в manifest: " + name);
+            }
+
+            File file = new File(dir, name);
+            if (!file.isFile()) {
+                throw new IllegalArgumentException(
+                        "Manifest ссылается на отсутствующий файл: " + name
+                );
+            }
+
+            String expected = files.optString(name, "").trim().toLowerCase();
+            if (expected.length() != 64) {
+                throw new IllegalArgumentException("Нет корректного SHA-256 для: " + name);
+            }
+
+            String actual = sha256(file);
+            if (!expected.equals(actual)) {
+                throw new SecurityException("SHA-256 не совпал: " + name);
+            }
+        }
+
+        for (String name : CORE_FILES) {
+            if (name.equals("manifest.json")) continue;
+            if (!files.has(name)) {
+                throw new IllegalArgumentException("Manifest не содержит SHA-256 для: " + name);
+            }
+        }
+
+        if (metadata.textConditioning) {
+            for (String name : TEXT_FILES) {
+                if (!files.has(name)) {
+                    throw new IllegalArgumentException("Manifest не содержит SHA-256 для: " + name);
+                }
+            }
+        }
+
+        return metadata;
+    }
+
     private static void extractZipSafely(Context context, Uri uri, File destination) throws Exception {
         String root = destination.getCanonicalPath() + File.separator;
         try (InputStream raw = context.getContentResolver().openInputStream(uri)) {
@@ -111,43 +192,6 @@ public final class ModelPackInstaller {
                     }
                     zip.closeEntry();
                 }
-            }
-        }
-    }
-
-    private static void validatePack(File dir) throws Exception {
-        File manifestFile = new File(dir, "manifest.json");
-        if (!manifestFile.isFile()) {
-            throw new IllegalArgumentException("В model pack нет manifest.json.");
-        }
-
-        String manifestText = readUtf8(manifestFile);
-        JSONObject manifest = new JSONObject(manifestText);
-        if (!PACK_ID.equals(manifest.optString("pack_id"))) {
-            throw new IllegalArgumentException("Неверный pack_id. Нужен " + PACK_ID + ".");
-        }
-
-        JSONObject files = manifest.optJSONObject("files");
-        if (files == null) {
-            throw new IllegalArgumentException("В manifest.json нет объекта files.");
-        }
-
-        for (String name : REQUIRED_FILES) {
-            File file = new File(dir, name);
-            if (!file.isFile()) {
-                throw new IllegalArgumentException("Не хватает файла: " + name);
-            }
-
-            if ("manifest.json".equals(name)) continue;
-
-            String expected = files.optString(name, "").trim().toLowerCase();
-            if (expected.length() != 64) {
-                throw new IllegalArgumentException("Нет корректного SHA-256 для: " + name);
-            }
-
-            String actual = sha256(file);
-            if (!expected.equals(actual)) {
-                throw new SecurityException("SHA-256 не совпал: " + name);
             }
         }
     }

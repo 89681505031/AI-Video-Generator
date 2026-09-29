@@ -1,15 +1,14 @@
 package com.alex.aivideo;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 
 import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtSession;
 
 /**
- * Opens only one ONNX model at a time.
- *
- * This is deliberate for phones: the video pipeline contains several large
- * models and keeping all sessions alive at once can cause avoidable RAM peaks.
+ * Opens only one ONNX model at a time to keep phone RAM peaks down.
  */
 public final class StagedOrtRunner {
     public interface SessionTask<T> {
@@ -37,22 +36,28 @@ public final class StagedOrtRunner {
     }
 
     /**
-     * Verifies that every neural-network file can at least be parsed by ORT.
-     * Sessions are opened and immediately closed one-by-one.
+     * Parses each ONNX graph separately and reports its real input/output names.
      */
     public String validateModelFiles() throws Exception {
-        String[] models = {
-                "vae_encoder.onnx",
-                "qwen2_encoder.onnx",
-                "mobilei2v_unet.onnx",
-                "turbo_vaed.onnx"
-        };
+        PackMetadata metadata = ModelPackInstaller.validatePack(modelDirectory);
+
+        List<String> models = new ArrayList<>();
+        models.add("vae_encoder.onnx");
+        if (metadata.textConditioning) {
+            models.add("qwen2_encoder.onnx");
+        }
+        models.add("mobilei2v_transformer.onnx");
+        models.add("video_decoder.onnx");
 
         StringBuilder result = new StringBuilder();
         for (String name : models) {
-            withSession(name, session -> null);
+            String io = withSession(name, session ->
+                    "inputs=" + session.getInputNames()
+                            + " • outputs=" + session.getOutputNames()
+            );
+
             if (result.length() > 0) result.append('\n');
-            result.append("OK • ").append(name);
+            result.append("OK • ").append(name).append("\n   ").append(io);
         }
         return result.toString();
     }

@@ -26,41 +26,37 @@ public final class MobileVideoEngine {
         return new File(context.getFilesDir(), "models/" + ModelPackInstaller.PACK_ID);
     }
 
+    public PackMetadata metadataOrNull() {
+        try {
+            return ModelPackInstaller.validatePack(modelDirectory());
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
     public String modelPackStatus() {
         File dir = modelDirectory();
         if (!dir.exists()) {
             return "MobileI2V model pack ещё не установлен.";
         }
 
-        int present = 0;
-        for (String name : ModelPackInstaller.REQUIRED_FILES) {
-            if (new File(dir, name).isFile()) {
-                present++;
-            }
+        try {
+            PackMetadata metadata = ModelPackInstaller.validatePack(dir);
+            return "MobileI2V pack: OK\n" + metadata.summary();
+        } catch (Exception e) {
+            return "Model pack не прошёл проверку:\n" + e.getMessage();
         }
-
-        if (present == ModelPackInstaller.REQUIRED_FILES.length) {
-            return "MobileI2V pack найден: " + present + "/"
-                    + ModelPackInstaller.REQUIRED_FILES.length + " файлов.";
-        }
-        return "Model pack неполный: " + present + "/"
-                + ModelPackInstaller.REQUIRED_FILES.length + " файлов.";
     }
 
     public boolean modelPackReady() {
-        File dir = modelDirectory();
-        if (!dir.exists()) return false;
-        for (String name : ModelPackInstaller.REQUIRED_FILES) {
-            if (!new File(dir, name).isFile()) return false;
-        }
-        return true;
+        return metadataOrNull() != null;
     }
 
-    /**
-     * Loads each ONNX graph separately and closes it immediately.
-     * This is intentionally manual, because parsing four large models on app
-     * start would create unnecessary memory pressure.
-     */
+    public boolean supportsPrompt() {
+        PackMetadata metadata = metadataOrNull();
+        return metadata != null && metadata.textConditioning;
+    }
+
     public String deepModelCheck() throws Exception {
         if (!modelPackReady()) {
             throw new IllegalStateException("Model pack ещё не установлен.");
