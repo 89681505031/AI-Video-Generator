@@ -1,1 +1,2 @@
 Trigger MobileI2V 512 model pack build.
+retry=2
