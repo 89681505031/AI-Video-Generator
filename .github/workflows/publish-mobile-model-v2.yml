@@ -1,0 +1,81 @@
+name: Publish Mobile Model Pack v2
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - publish-mobile-model-v2
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ARTIFACT_ID: "11052802734"
+      TAG: "mobile-model-v0.2"
+      ASSET: "mobile_i2v_v2_512_base30_turbo.zip"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified v2 artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" \
+            -o artifact.zip
+          mkdir extracted
+          unzip -q artifact.zip -d extracted
+          test -f extracted/mobile_i2v_v1_512_base30_turbo.zip
+          mv extracted/mobile_i2v_v1_512_base30_turbo.zip "$ASSET"
+          sha256sum "$ASSET" | tee model-v2-sha256.txt
+          ls -lh "$ASSET"
+
+      - name: Publish verified v2 release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          SHA=$(cut -d' ' -f1 model-v2-sha256.txt)
+          cat > notes.md <<EOF
+          MobileI2V Android model pack v0.2.
+
+          Fixes Android ONNX Runtime loading of vae_encoder.onnx by normalizing
+          negative Transpose perm axes before packaging.
+
+          Validation:
+          - onnx.checker: passed
+          - ONNX Runtime CPU session load: passed for all three graphs
+          - 512x512
+          - 17 frames
+          - base MobileI2V checkpoint
+          - 30 FlowEuler steps
+          - Turbo-VAED-LTX decoder
+
+          ZIP SHA-256: $SHA
+          EOF
+
+          gh release create "$TAG" "$ASSET" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "mobile-android-v1" \
+            --title "MobileI2V Android Model Pack v0.2" \
+            --notes-file notes.md \
+            --prerelease
+
+      - name: Verify release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,assets
