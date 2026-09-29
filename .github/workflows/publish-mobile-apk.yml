@@ -62,10 +62,10 @@ jobs:
           APK SHA-256: $APK_SHA
 
           After installing the APK:
-- the old v0.1 model pack is treated as outdated;
-- tap "Скачать модель 1.7 ГБ";
-- the app downloads and verifies MobileI2V model pack v0.2;
-- then select an image and create video locally.
+          - the old v0.1 model pack is treated as outdated;
+          - tap "Скачать модель 1.7 ГБ";
+          - the app downloads and verifies MobileI2V model pack v0.2;
+          - then select an image and create video locally.
           EOF
 
       - name: Create or update prerelease
