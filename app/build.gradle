@@ -1,0 +1,31 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.alex.aivideo'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "com.alex.aivideo"
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName "0.1-mobile"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packaging {
+        resources {
+            excludes += ["META-INF/LICENSE*", "META-INF/NOTICE*"]
+        }
+    }
+}
+
+dependencies {
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.30.0'
+}

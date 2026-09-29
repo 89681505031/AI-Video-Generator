@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#090B12"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="AI VIDEO • MOBILE"
+            android:textColor="#8BE9FD"
+            android:textSize="28sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Локальная генерация видео на Android — прототип движка"
+            android:textColor="#C8CFDF"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/deviceInfo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:background="#151A26"
+            android:padding="16dp"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
+
+        <EditText
+            android:id="@+id/prompt"
+            android:layout_width="match_parent"
+            android:layout_height="120dp"
+            android:layout_marginTop="20dp"
+            android:background="#151A26"
+            android:gravity="top|start"
+            android:hint="Опишите видео..."
+            android:inputType="textMultiLine"
+            android:padding="16dp"
+            android:textColor="#FFFFFF"
+            android:textColorHint="#6F7890" />
+
+        <Button
+            android:id="@+id/checkButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Проверить мобильный движок" />
+
+        <TextView
+            android:id="@+id/engineStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="#151A26"
+            android:padding="16dp"
+            android:textColor="#C8CFDF"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/generateButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Создать видео на телефоне" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Эта версия намеренно не имитирует генерацию: пока совместимый model pack не установлен, кнопка сообщает об этом честно."
+            android:textColor="#7F899F"
+            android:textSize="12sp" />
+    </LinearLayout>
+</ScrollView>
