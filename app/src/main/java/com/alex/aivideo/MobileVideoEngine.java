@@ -7,15 +7,6 @@ import java.io.File;
 import ai.onnxruntime.OrtEnvironment;
 
 public final class MobileVideoEngine {
-    private static final String PACK_DIR = "mobile_video_v1";
-    private static final String[] REQUIRED_FILES = {
-            "text_encoder.onnx",
-            "video_model.onnx",
-            "vae_decoder.onnx",
-            "tokenizer.json",
-            "manifest.json"
-    };
-
     private final Context context;
 
     public MobileVideoEngine(Context context) {
@@ -32,32 +23,34 @@ public final class MobileVideoEngine {
     }
 
     public File modelDirectory() {
-        return new File(context.getFilesDir(), "models/" + PACK_DIR);
+        return new File(context.getFilesDir(), "models/" + ModelPackInstaller.PACK_ID);
     }
 
     public String modelPackStatus() {
         File dir = modelDirectory();
         if (!dir.exists()) {
-            return "Мобильная модель ещё не установлена.";
+            return "MobileI2V model pack ещё не установлен.";
         }
 
         int present = 0;
-        for (String name : REQUIRED_FILES) {
+        for (String name : ModelPackInstaller.REQUIRED_FILES) {
             if (new File(dir, name).isFile()) {
                 present++;
             }
         }
 
-        if (present == REQUIRED_FILES.length) {
-            return "Model pack найден: " + present + "/" + REQUIRED_FILES.length + " файлов.";
+        if (present == ModelPackInstaller.REQUIRED_FILES.length) {
+            return "MobileI2V pack найден: " + present + "/"
+                    + ModelPackInstaller.REQUIRED_FILES.length + " файлов.";
         }
-        return "Model pack неполный: " + present + "/" + REQUIRED_FILES.length + " файлов.";
+        return "Model pack неполный: " + present + "/"
+                + ModelPackInstaller.REQUIRED_FILES.length + " файлов.";
     }
 
     public boolean modelPackReady() {
         File dir = modelDirectory();
         if (!dir.exists()) return false;
-        for (String name : REQUIRED_FILES) {
+        for (String name : ModelPackInstaller.REQUIRED_FILES) {
             if (!new File(dir, name).isFile()) return false;
         }
         return true;
