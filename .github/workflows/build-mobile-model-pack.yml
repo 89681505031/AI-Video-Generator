@@ -49,6 +49,7 @@ jobs:
             yapf==0.43.0 \
             onnx==1.17.0 \
             accelerate==1.1.0 \
+            pytz==2025.2 \
             opencv-python-headless==4.12.0.88
           python -m pip install --no-build-isolation mmcv==1.7.2
 
