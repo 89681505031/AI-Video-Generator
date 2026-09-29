@@ -7,19 +7,22 @@ import android.os.StatFs;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
 public final class ModelRelease {
+    public static final String INSTALL_MARKER = ".model_release_sha256";
     public static final String FILE_NAME =
-            "mobile_i2v_v1_512_base30_turbo.zip";
+            "mobile_i2v_v2_512_base30_turbo.zip";
 
     public static final String DOWNLOAD_URL =
             "https://github.com/89681505031/AI-Video-Generator/"
-                    + "releases/download/mobile-model-v0.1/"
+                    + "releases/download/mobile-model-v0.2/"
                     + FILE_NAME;
 
     public static final String SHA256 =
-            "b293b0d49d387b24d9b9e791f341df418048bdb89a177b42f05191295309c02b";
+            "f976263fe16a3a9f913cd7fd6b76cb31efbd99c04ce6c9b8d589c7b6c270885d";
 
     public static final long REQUIRED_FREE_BYTES =
             5L * 1024L * 1024L * 1024L;
@@ -53,6 +56,40 @@ public final class ModelRelease {
             throw new IllegalStateException(
                     "Для модели нужно минимум 5 ГБ свободного места."
             );
+        }
+    }
+
+    public static boolean isCurrentInstalled(File modelDir) {
+        File marker = new File(modelDir, INSTALL_MARKER);
+        if (!marker.isFile()) {
+            return false;
+        }
+        try {
+            byte[] data = new byte[(int) marker.length()];
+            try (FileInputStream in = new FileInputStream(marker)) {
+                int offset = 0;
+                while (offset < data.length) {
+                    int read = in.read(data, offset, data.length - offset);
+                    if (read < 0) break;
+                    offset += read;
+                }
+                if (offset != data.length) return false;
+            }
+            String value = new String(data, StandardCharsets.UTF_8).trim();
+            return SHA256.equals(value);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    public static void markInstalled(File modelDir) throws Exception {
+        if (modelDir == null || !modelDir.isDirectory()) {
+            throw new IllegalArgumentException("Папка установленной модели не найдена.");
+        }
+        File marker = new File(modelDir, INSTALL_MARKER);
+        try (FileOutputStream out = new FileOutputStream(marker, false)) {
+            out.write((SHA256 + "\n").getBytes(StandardCharsets.UTF_8));
+            out.getFD().sync();
         }
     }
 

@@ -353,6 +353,50 @@ def load_turbo_vaed_ltx(
     return model.eval().to(device=device, dtype=dtype)
 
 
+def normalize_onnx_transpose_perms(path: Path) -> None:
+    """Rewrite negative Transpose perm entries to equivalent positive axes.
+
+    PyTorch may export Python-style negative axes (for example -1) in a
+    Transpose attribute. ONNX Runtime requires perm to contain a permutation
+    of [0, rank-1], so normalize these values before packaging.
+    """
+    import onnx
+
+    model = onnx.load(str(path), load_external_data=False)
+    changed = 0
+
+    for node in model.graph.node:
+        if node.op_type != "Transpose":
+            continue
+        for attr in node.attribute:
+            if attr.name != "perm":
+                continue
+            rank = len(attr.ints)
+            if rank == 0:
+                continue
+            original = list(attr.ints)
+            normalized = [
+                (axis + rank if axis < 0 else axis)
+                for axis in original
+            ]
+            if sorted(normalized) != list(range(rank)):
+                raise SystemExit(
+                    f"Invalid Transpose perm in {path.name}: "
+                    f"{original} -> {normalized}"
+                )
+            if normalized != original:
+                del attr.ints[:]
+                attr.ints.extend(normalized)
+                changed += 1
+
+    if changed:
+        onnx.save(model, str(path))
+        print(
+            f"Normalized {changed} negative Transpose perm attribute(s) "
+            f"in {path.name}"
+        )
+
+
 def export_graph(
     module: torch.nn.Module,
     args: tuple[torch.Tensor, ...],
@@ -376,6 +420,8 @@ def export_graph(
 
     if not path.is_file() or path.stat().st_size == 0:
         raise SystemExit(f"ONNX export did not create {path}")
+
+    normalize_onnx_transpose_perms(path)
 
 
 def main() -> None:

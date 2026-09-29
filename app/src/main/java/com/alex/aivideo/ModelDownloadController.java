@@ -254,7 +254,7 @@ public final class ModelDownloadController {
                 }
 
                 postStatus("SHA-256: OK • Устанавливаю model pack…");
-                ModelPackInstaller.install(activity, uri);
+                ModelPackInstaller.installVerifiedCurrent(activity, uri);
 
                 manager.remove(id);
                 clearStateOnMain();
