@@ -66,8 +66,20 @@ def check_source_compatibility(root: Path, width: int, height: int) -> None:
                 "Use the official distillation branch for 512x512 export."
             )
 
+    # mobiledit.py also contains older/unused block classes. Only inspect
+    # the SanaBlock_cross class instantiated by Mobiledit itself.
+    cross_start = text.find("class SanaBlock_cross")
+    cross_end = text.find("class SanaBlock_vanila", cross_start)
+
+    if cross_start < 0:
+        raise SystemExit("Could not find class SanaBlock_cross in mobiledit.py")
+
+    cross_block = text[
+        cross_start : (cross_end if cross_end > cross_start else len(text))
+    ]
+
     active_cross_attention = False
-    for line in text.splitlines():
+    for line in cross_block.splitlines():
         stripped = line.lstrip()
         if (
             "self.cross_attn(x, y" in stripped
@@ -78,7 +90,7 @@ def check_source_compatibility(root: Path, width: int, height: int) -> None:
 
     if active_cross_attention:
         raise SystemExit(
-            "Cross-attention appears active in this source tree. "
+            "SanaBlock_cross has active cross-attention. "
             "Android v4 is prompt-free; export a new pack format instead."
         )
 
