@@ -69,6 +69,13 @@
             android:textColorHint="#6F7890" />
 
         <Button
+            android:id="@+id/downloadModelButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Скачать модель 1.7 ГБ" />
+
+        <Button
             android:id="@+id/modelPackButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -103,7 +110,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="ZIP принимается только после проверки manifest.json и SHA-256 каждого файла модели. Генерация пока не имитируется."
+            android:text="Модель устанавливается отдельно от APK. ZIP и все файлы внутри проверяются по SHA-256. После успешной установки скачанный ZIP удаляется."
             android:textColor="#7F899F"
             android:textSize="12sp" />
     </LinearLayout>

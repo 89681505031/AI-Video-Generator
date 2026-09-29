@@ -20,6 +20,8 @@ public class MainActivity extends Activity {
     private TextView imageStatus;
     private EditText prompt;
     private Button generateButton;
+    private Button downloadModelButton;
+    private ModelDownloadController modelDownloadController;
     private MobileVideoEngine engine;
     private Uri selectedImageUri;
 
@@ -33,6 +35,7 @@ public class MainActivity extends Activity {
         imageStatus = findViewById(R.id.imageStatus);
         prompt = findViewById(R.id.prompt);
         generateButton = findViewById(R.id.generateButton);
+        downloadModelButton = findViewById(R.id.downloadModelButton);
 
         Button checkButton = findViewById(R.id.checkButton);
         Button imageButton = findViewById(R.id.imageButton);
@@ -42,11 +45,37 @@ public class MainActivity extends Activity {
         deviceInfo.setText(profile.summary());
 
         engine = new MobileVideoEngine(this);
+        modelDownloadController = new ModelDownloadController(
+                this,
+                new ModelDownloadController.Listener() {
+                    @Override
+                    public void onStatus(String status) {
+                        engineStatus.setText(status);
+                    }
+
+                    @Override
+                    public void onInstalled() {
+                        Toast.makeText(
+                                MainActivity.this,
+                                "Модель установлена и готова.",
+                                Toast.LENGTH_LONG
+                        ).show();
+                        refreshStatus();
+                    }
+
+                    @Override
+                    public void onActiveChanged(boolean active) {
+                        updateDownloadButton();
+                    }
+                }
+        );
         refreshStatus();
+        modelDownloadController.resume();
 
         checkButton.setOnClickListener(v -> runDeepCheck());
         imageButton.setOnClickListener(v -> openImagePicker());
         modelPackButton.setOnClickListener(v -> openModelPackPicker());
+        downloadModelButton.setOnClickListener(v -> modelDownloadController.start());
         generateButton.setOnClickListener(v -> generateVideo());
     }
 
@@ -231,6 +260,21 @@ public class MainActivity extends Activity {
         }, "ort-deep-check").start();
     }
 
+    private void updateDownloadButton() {
+        boolean ready = engine != null && engine.modelPackReady();
+        boolean active = modelDownloadController != null
+                && modelDownloadController.isActive();
+
+        downloadModelButton.setEnabled(!ready && !active);
+        downloadModelButton.setText(
+                ready
+                        ? "Модель установлена ✓"
+                        : (active
+                        ? "Модель скачивается…"
+                        : "Скачать модель 1.7 ГБ")
+        );
+    }
+
     private void refreshStatus() {
         boolean ort = engine.runtimeReady();
 
@@ -250,5 +294,14 @@ public class MainActivity extends Activity {
         generateButton.setEnabled(
                 ort && engine.modelPackReady()
         );
+        updateDownloadButton();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (modelDownloadController != null) {
+            modelDownloadController.close();
+        }
+        super.onDestroy();
     }
 }

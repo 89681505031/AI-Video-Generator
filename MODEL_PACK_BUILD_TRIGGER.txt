@@ -1,2 +1,2 @@
-Trigger MobileI2V 512 model pack build.
-retry=5
+Rebuild MobileI2V 512 model pack after Android ORT Transpose fix.
+version=2

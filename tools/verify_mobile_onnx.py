@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 import onnx
+import onnxruntime as ort
 
 EXPECTED = {
     "vae_encoder.onnx": (
@@ -68,7 +69,28 @@ def main() -> None:
                 f"{name} outputs={sorted(outputs)}, expected={sorted(expected_outputs)}"
             )
 
-        print(f"OK {name}")
+        # This is deliberately stronger than onnx.checker: Android failed on
+        # a graph that checker accepted because ORT rejected a Transpose perm
+        # containing -1. Creating a CPU session exercises ORT's real graph
+        # loading/type-inference path before the pack is published.
+        session = ort.InferenceSession(
+            str(path),
+            providers=["CPUExecutionProvider"],
+        )
+        session_inputs = {item.name for item in session.get_inputs()}
+        session_outputs = {item.name for item in session.get_outputs()}
+        if session_inputs != expected_inputs:
+            raise SystemExit(
+                f"{name} ORT inputs={sorted(session_inputs)}, "
+                f"expected={sorted(expected_inputs)}"
+            )
+        if session_outputs != expected_outputs:
+            raise SystemExit(
+                f"{name} ORT outputs={sorted(session_outputs)}, "
+                f"expected={sorted(expected_outputs)}"
+            )
+
+        print(f"OK {name} (onnx.checker + ONNX Runtime load)")
         print("  inputs :", sorted(inputs))
         print("  outputs:", sorted(outputs))
 
