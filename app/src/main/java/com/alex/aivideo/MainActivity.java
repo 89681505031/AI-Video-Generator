@@ -58,17 +58,22 @@ public class MainActivity extends Activity {
             }
 
             if (selectedImageUri == null) {
-                Toast.makeText(this, "Сначала выберите исходное изображение.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(
+                        this,
+                        "Сначала выберите исходное изображение.",
+                        Toast.LENGTH_SHORT
+                ).show();
                 return;
             }
 
             String mode = metadata.variant.equals("distilled")
                     ? "DISTILLED " + metadata.samplingSteps + "-step"
                     : "BASE " + metadata.samplingSteps + "-step";
+
             Toast.makeText(
                     this,
                     mode + " pack и изображение готовы. "
-                            + "Следующий блок — реальные tensor I/O MobileI2V.",
+                            + "Официальный граф пока работает как Image→Video без prompt.",
                     Toast.LENGTH_LONG
             ).show();
         });
@@ -92,22 +97,36 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+    protected void onActivityResult(
+            int requestCode,
+            int resultCode,
+            Intent data
+    ) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
+
+        if (resultCode != RESULT_OK
+                || data == null
+                || data.getData() == null) {
+            return;
+        }
 
         Uri uri = data.getData();
 
         if (requestCode == REQ_IMAGE) {
             selectedImageUri = uri;
             try {
-                int flags = data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION;
+                int flags = data.getFlags()
+                        & Intent.FLAG_GRANT_READ_URI_PERMISSION;
                 if (flags != 0) {
-                    getContentResolver().takePersistableUriPermission(uri, flags);
+                    getContentResolver().takePersistableUriPermission(
+                            uri,
+                            flags
+                    );
                 }
             } catch (SecurityException ignored) {
                 // Some providers grant access only for the current process.
             }
+
             imageStatus.setText("Изображение выбрано:\n" + uri);
             return;
         }
@@ -118,19 +137,27 @@ public class MainActivity extends Activity {
     }
 
     private void installModelPack(Uri uri) {
-        engineStatus.setText("Проверяю ZIP, runtime contract и SHA-256…");
+        engineStatus.setText(
+                "Проверяю ZIP, runtime contract и SHA-256…"
+        );
         generateButton.setEnabled(false);
 
         new Thread(() -> {
             try {
                 ModelPackInstaller.install(this, uri);
                 runOnUiThread(() -> {
-                    Toast.makeText(this, "MobileI2V model pack установлен.", Toast.LENGTH_LONG).show();
+                    Toast.makeText(
+                            this,
+                            "MobileI2V model pack установлен.",
+                            Toast.LENGTH_LONG
+                    ).show();
                     refreshStatus();
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
-                    engineStatus.setText("Model pack отклонён:\n" + e.getMessage());
+                    engineStatus.setText(
+                            "Model pack отклонён:\n" + e.getMessage()
+                    );
                     generateButton.setEnabled(engine.runtimeReady());
                 });
             }
@@ -147,7 +174,9 @@ public class MainActivity extends Activity {
             return;
         }
 
-        engineStatus.setText("Поочерёдно проверяю ONNX-модели…");
+        engineStatus.setText(
+                "Поочерёдно проверяю ONNX-модели…"
+        );
         generateButton.setEnabled(false);
 
         new Thread(() -> {
@@ -164,7 +193,9 @@ public class MainActivity extends Activity {
                 });
             } catch (Throwable e) {
                 runOnUiThread(() -> {
-                    engineStatus.setText("Ошибка проверки ONNX:\n" + e.getMessage());
+                    engineStatus.setText(
+                            "Ошибка проверки ONNX:\n" + e.getMessage()
+                    );
                     generateButton.setEnabled(true);
                 });
             }
@@ -173,18 +204,19 @@ public class MainActivity extends Activity {
 
     private void refreshStatus() {
         boolean ort = engine.runtimeReady();
+
         String status = (ort ? "ONNX Runtime: OK" : "ONNX Runtime: ошибка")
                 + "\n" + engine.modelPackStatus()
-                + "\nПапка: " + engine.modelDirectory().getAbsolutePath();
+                + "\nПапка: "
+                + engine.modelDirectory().getAbsolutePath();
 
         engineStatus.setText(status);
 
-        PackMetadata metadata = engine.metadataOrNull();
-        boolean promptEnabled = metadata != null && metadata.textConditioning;
-        prompt.setEnabled(promptEnabled);
-        prompt.setHint(promptEnabled
-                ? "Опишите движение или сцену..."
-                : "Lite I2V: текст отключён, экономим память телефона");
+        prompt.setEnabled(false);
+        prompt.setText("");
+        prompt.setHint(
+                "Текущий официальный MobileI2V: prompt не используется"
+        );
 
         generateButton.setEnabled(ort);
     }

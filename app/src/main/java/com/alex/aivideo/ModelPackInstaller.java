@@ -19,23 +19,14 @@ import java.util.zip.ZipInputStream;
 
 public final class ModelPackInstaller {
     public static final String PACK_ID = "mobile_i2v_v1";
-    public static final int FORMAT_VERSION = 3;
+    public static final int FORMAT_VERSION = 4;
 
     public static final String[] CORE_FILES = {
             "vae_encoder.onnx",
             "mobilei2v_transformer.onnx",
             "video_decoder.onnx",
-            "null_condition.bin",
-            "null_attention_mask.bin",
             "runtime.json",
             "manifest.json"
-    };
-
-    public static final String[] TEXT_FILES = {
-            "qwen2_encoder.onnx",
-            "tokenizer.json",
-            "tokenizer_config.json",
-            "special_tokens_map.json"
     };
 
     private ModelPackInstaller() {}
@@ -86,8 +77,7 @@ public final class ModelPackInstaller {
             throw new IllegalArgumentException("В model pack нет manifest.json.");
         }
 
-        String manifestText = readUtf8(manifestFile);
-        JSONObject manifest = new JSONObject(manifestText);
+        JSONObject manifest = new JSONObject(readUtf8(manifestFile));
         if (!PACK_ID.equals(manifest.optString("pack_id"))) {
             throw new IllegalArgumentException("Неверный pack_id. Нужен " + PACK_ID + ".");
         }
@@ -104,18 +94,13 @@ public final class ModelPackInstaller {
 
         for (String name : CORE_FILES) {
             if (!new File(dir, name).isFile()) {
-                throw new IllegalArgumentException("Не хватает обязательного файла: " + name);
+                throw new IllegalArgumentException(
+                        "Не хватает обязательного файла: " + name
+                );
             }
         }
 
         PackMetadata metadata = PackMetadata.load(dir);
-        if (metadata.textConditioning) {
-            for (String name : TEXT_FILES) {
-                if (!new File(dir, name).isFile()) {
-                    throw new IllegalArgumentException("Text pack неполный: " + name);
-                }
-            }
-        }
 
         Iterator<String> keys = files.keys();
         while (keys.hasNext()) {
@@ -133,7 +118,9 @@ public final class ModelPackInstaller {
 
             String expected = files.optString(name, "").trim().toLowerCase();
             if (expected.length() != 64) {
-                throw new IllegalArgumentException("Нет корректного SHA-256 для: " + name);
+                throw new IllegalArgumentException(
+                        "Нет корректного SHA-256 для: " + name
+                );
             }
 
             String actual = sha256(file);
@@ -145,25 +132,27 @@ public final class ModelPackInstaller {
         for (String name : CORE_FILES) {
             if (name.equals("manifest.json")) continue;
             if (!files.has(name)) {
-                throw new IllegalArgumentException("Manifest не содержит SHA-256 для: " + name);
-            }
-        }
-
-        if (metadata.textConditioning) {
-            for (String name : TEXT_FILES) {
-                if (!files.has(name)) {
-                    throw new IllegalArgumentException("Manifest не содержит SHA-256 для: " + name);
-                }
+                throw new IllegalArgumentException(
+                        "Manifest не содержит SHA-256 для: " + name
+                );
             }
         }
 
         return metadata;
     }
 
-    private static void extractZipSafely(Context context, Uri uri, File destination) throws Exception {
+    private static void extractZipSafely(
+            Context context,
+            Uri uri,
+            File destination
+    ) throws Exception {
         String root = destination.getCanonicalPath() + File.separator;
+
         try (InputStream raw = context.getContentResolver().openInputStream(uri)) {
-            if (raw == null) throw new IllegalArgumentException("Не удалось открыть ZIP.");
+            if (raw == null) {
+                throw new IllegalArgumentException("Не удалось открыть ZIP.");
+            }
+
             try (ZipInputStream zip = new ZipInputStream(new BufferedInputStream(raw))) {
                 ZipEntry entry;
                 byte[] buffer = new byte[1024 * 1024];
@@ -177,18 +166,25 @@ public final class ModelPackInstaller {
                     File out = new File(destination, name);
                     String canonical = out.getCanonicalPath();
                     if (!canonical.startsWith(root)) {
-                        throw new SecurityException("ZIP пытается выйти за папку model pack.");
+                        throw new SecurityException(
+                                "ZIP пытается выйти за папку model pack."
+                        );
                     }
 
                     if (entry.isDirectory()) {
                         if (!out.exists() && !out.mkdirs()) {
-                            throw new IllegalStateException("Не удалось создать папку: " + name);
+                            throw new IllegalStateException(
+                                    "Не удалось создать папку: " + name
+                            );
                         }
                     } else {
                         File parent = out.getParentFile();
                         if (parent != null && !parent.exists() && !parent.mkdirs()) {
-                            throw new IllegalStateException("Не удалось создать папку для: " + name);
+                            throw new IllegalStateException(
+                                    "Не удалось создать папку для: " + name
+                            );
                         }
+
                         try (BufferedOutputStream os =
                                      new BufferedOutputStream(new FileOutputStream(out))) {
                             int read;
@@ -208,6 +204,7 @@ public final class ModelPackInstaller {
         if (length > 1024 * 1024) {
             throw new IllegalArgumentException("manifest.json слишком большой.");
         }
+
         byte[] data = new byte[(int) length];
         try (FileInputStream in = new FileInputStream(file)) {
             int offset = 0;
@@ -217,7 +214,9 @@ public final class ModelPackInstaller {
                 offset += read;
             }
             if (offset != data.length) {
-                throw new IllegalStateException("Не удалось полностью прочитать manifest.json.");
+                throw new IllegalStateException(
+                        "Не удалось полностью прочитать manifest.json."
+                );
             }
         }
         return new String(data, StandardCharsets.UTF_8);
@@ -226,7 +225,9 @@ public final class ModelPackInstaller {
     private static String sha256(File file) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         byte[] buffer = new byte[1024 * 1024];
-        try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(file))) {
+
+        try (BufferedInputStream in =
+                     new BufferedInputStream(new FileInputStream(file))) {
             int read;
             while ((read = in.read(buffer)) != -1) {
                 digest.update(buffer, 0, read);
@@ -242,12 +243,16 @@ public final class ModelPackInstaller {
 
     private static void deleteRecursively(File file) {
         if (file == null || !file.exists()) return;
+
         if (file.isDirectory()) {
             File[] children = file.listFiles();
             if (children != null) {
-                for (File child : children) deleteRecursively(child);
+                for (File child : children) {
+                    deleteRecursively(child);
+                }
             }
         }
+
         //noinspection ResultOfMethodCallIgnored
         file.delete();
     }

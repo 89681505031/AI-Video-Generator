@@ -54,8 +54,9 @@ public final class PackMetadata {
             throw new IllegalArgumentException("В model pack нет runtime.json.");
         }
 
-        byte[] bytes = readAll(runtime, 1024 * 1024);
-        JSONObject json = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
+        JSONObject json = new JSONObject(
+                new String(readAll(runtime, 1024 * 1024), StandardCharsets.UTF_8)
+        );
 
         String variant = json.optString("variant", "").trim().toLowerCase();
         int width = json.optInt("width", 0);
@@ -71,87 +72,80 @@ public final class PackMetadata {
         String sourceCommit = json.optString("source_commit", "").trim();
 
         if (!variant.equals("base") && !variant.equals("distilled")) {
-            throw new IllegalArgumentException("variant должен быть base или distilled.");
+            throw new IllegalArgumentException(
+                    "variant должен быть base или distilled."
+            );
         }
         if (width <= 0 || height <= 0) {
-            throw new IllegalArgumentException("Размер кадра должен быть положительным.");
+            throw new IllegalArgumentException(
+                    "Размер кадра должен быть положительным."
+            );
         }
         if ((width & 1) != 0 || (height & 1) != 0) {
-            throw new IllegalArgumentException("Ширина и высота видео должны быть чётными.");
+            throw new IllegalArgumentException(
+                    "Ширина и высота видео должны быть чётными."
+            );
         }
         if (frames != MobileI2VContract.OUTPUT_FRAMES) {
             throw new IllegalArgumentException(
-                    "MobileI2V v1 ожидает " + MobileI2VContract.OUTPUT_FRAMES + " кадров."
+                    "MobileI2V v1 ожидает "
+                            + MobileI2VContract.OUTPUT_FRAMES + " кадров."
             );
         }
         if (latentChannels != MobileI2VContract.LATENT_CHANNELS) {
             throw new IllegalArgumentException(
-                    "Ожидается " + MobileI2VContract.LATENT_CHANNELS + " latent-каналов."
+                    "Ожидается " + MobileI2VContract.LATENT_CHANNELS
+                            + " latent-каналов."
             );
         }
         if (vaeDownsampleRate != MobileI2VContract.SPATIAL_DOWNSAMPLE) {
             throw new IllegalArgumentException(
-                    "Ожидается VAE downsample ×" + MobileI2VContract.SPATIAL_DOWNSAMPLE + "."
+                    "Ожидается VAE downsample ×"
+                            + MobileI2VContract.SPATIAL_DOWNSAMPLE + "."
             );
         }
         if (temporalLatents != MobileI2VContract.LATENT_TIME) {
-            throw new IllegalArgumentException("Неверное число temporal latents.");
+            throw new IllegalArgumentException(
+                    "Неверное число temporal latents."
+            );
         }
         if (samplingSteps <= 0 || samplingSteps > 60) {
-            throw new IllegalArgumentException("Некорректное число sampling_steps.");
+            throw new IllegalArgumentException(
+                    "Некорректное число sampling_steps."
+            );
         }
         if (variant.equals("distilled") && samplingSteps > 4) {
-            throw new IllegalArgumentException("Distilled pack не должен объявлять больше 4 шагов.");
-        }
-        if (textConditioning
-                && (textMaxLength != MobileI2VContract.TEXT_MAX_TOKENS
-                || captionChannels != MobileI2VContract.TEXT_CHANNELS)) {
             throw new IllegalArgumentException(
-                    "Text pack должен использовать Qwen2 max_length="
-                            + MobileI2VContract.TEXT_MAX_TOKENS
-                            + " и " + MobileI2VContract.TEXT_CHANNELS + " каналов."
+                    "Distilled pack не должен объявлять больше 4 шагов."
             );
         }
+
+        if (textConditioning) {
+            throw new IllegalArgumentException(
+                    "Format v4 не принимает text_conditioning=true: "
+                            + "в текущем официальном MobileI2V cross-attention отключён."
+            );
+        }
+
         if (sourceCommit.isEmpty()) {
-            throw new IllegalArgumentException("runtime.json должен содержать source_commit.");
-        }
-
-        File nullCondition = new File(dir, "null_condition.bin");
-        long expectedNullBytes =
-                1L * 1L * MobileI2VContract.TEXT_MAX_TOKENS
-                        * MobileI2VContract.TEXT_CHANNELS * 2L;
-        if (!nullCondition.isFile() || nullCondition.length() != expectedNullBytes) {
             throw new IllegalArgumentException(
-                    "null_condition.bin должен быть FP16 [1,1,"
-                            + MobileI2VContract.TEXT_MAX_TOKENS + ","
-                            + MobileI2VContract.TEXT_CHANNELS + "] ("
-                            + expectedNullBytes + " байт)."
+                    "runtime.json должен содержать source_commit."
             );
         }
 
-        File nullMask = new File(dir, "null_attention_mask.bin");
-        byte[] maskBytes = readAll(
-                nullMask,
-                MobileI2VContract.TEXT_MAX_TOKENS
-        );
-        if (maskBytes.length != MobileI2VContract.TEXT_MAX_TOKENS) {
-            throw new IllegalArgumentException(
-                    "null_attention_mask.bin должен содержать ровно "
-                            + MobileI2VContract.TEXT_MAX_TOKENS + " байт."
-            );
-        }
-        for (byte value : maskBytes) {
-            int unsigned = value & 0xff;
-            if (unsigned != 0 && unsigned != 1) {
-                throw new IllegalArgumentException(
-                        "null_attention_mask.bin должен содержать только 0/1."
-                );
-            }
-        }
         return new PackMetadata(
-                variant, width, height, frames, latentChannels, vaeDownsampleRate,
-                temporalLatents, samplingSteps, textConditioning, textMaxLength,
-                captionChannels, sourceCommit
+                variant,
+                width,
+                height,
+                frames,
+                latentChannels,
+                vaeDownsampleRate,
+                temporalLatents,
+                samplingSteps,
+                false,
+                textMaxLength,
+                captionChannels,
+                sourceCommit
         );
     }
 
@@ -171,9 +165,10 @@ public final class PackMetadata {
         String speed = variant.equals("distilled")
                 ? "DISTILLED • " + samplingSteps + " шага"
                 : "BASE • " + samplingSteps + " шагов (медленнее)";
-        String prompt = textConditioning ? "текст: да" : "текст: Lite/без Qwen2";
+
         return speed + "\n"
-                + width + "×" + height + " • " + frames + " кадров • " + prompt
+                + width + "×" + height + " • " + frames + " кадров"
+                + "\nофициальный I2V • prompt пока не используется"
                 + "\nlatent: " + latentChannels + "×" + temporalLatents + "×"
                 + latentHeight() + "×" + latentWidth()
                 + " • positions=" + sequencePositions();
@@ -182,8 +177,11 @@ public final class PackMetadata {
     private static byte[] readAll(File file, int maxBytes) throws Exception {
         long length = file.length();
         if (length < 0 || length > maxBytes) {
-            throw new IllegalArgumentException("Файл метаданных слишком большой.");
+            throw new IllegalArgumentException(
+                    "Файл метаданных слишком большой."
+            );
         }
+
         byte[] data = new byte[(int) length];
         try (FileInputStream in = new FileInputStream(file)) {
             int offset = 0;
@@ -193,7 +191,9 @@ public final class PackMetadata {
                 offset += read;
             }
             if (offset != data.length) {
-                throw new IllegalStateException("Не удалось полностью прочитать метаданные.");
+                throw new IllegalStateException(
+                        "Не удалось полностью прочитать метаданные."
+                );
             }
         }
         return data;

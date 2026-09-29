@@ -10,11 +10,10 @@ import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtSession;
 
 /**
- * Real ONNX Runtime core for the Lite MobileI2V path.
+ * Real ONNX Runtime core for official MobileI2V.
  *
- * The decoder remains a separate stage because full decoded 720p video tensors
- * are large; frame/chunk decoding will be connected after the final decoder
- * export is validated on-device.
+ * Upstream MobileDiT currently has cross-attention disabled, so the exported
+ * denoiser graph depends only on x, timestep, cond_mask and flow_score.
  */
 public final class MobileI2VOrtCore {
     private static final Set<String> VAE_INPUTS = Set.of("image");
@@ -23,10 +22,8 @@ public final class MobileI2VOrtCore {
     private static final Set<String> DENOISER_INPUTS = Set.of(
             "x",
             "timestep",
-            "y",
             "cond_mask",
-            "flow_score",
-            "attention_mask"
+            "flow_score"
     );
     private static final Set<String> DENOISER_OUTPUTS = Set.of("noise");
 
@@ -67,7 +64,8 @@ public final class MobileI2VOrtCore {
                     imageNcthw,
                     imageShape
             )) {
-                try (OrtSession.Result result = session.run(Map.of("image", image))) {
+                try (OrtSession.Result result =
+                             session.run(Map.of("image", image))) {
                     OnnxValue output = result.get("posterior_moments")
                             .orElseThrow(() -> new IllegalStateException(
                                     "VAE encoder не вернул posterior_moments."
@@ -92,25 +90,11 @@ public final class MobileI2VOrtCore {
         );
     }
 
-    /**
-     * Runs the complete Lite denoising loop with one MobileDiT inference per
-     * scheduler step.
-     *
-     * In Lite mode condition == uncondition, so CFG algebra collapses to one
-     * model prediction and the second batch/pass can be skipped safely.
-     */
-    public float[] denoiseLite(
+    public float[] denoise(
             float[] initialLatent,
             float[] guideImage,
-            LiteConditioning conditioning,
             PackMetadata metadata
     ) throws Exception {
-        if (metadata.textConditioning) {
-            throw new IllegalArgumentException(
-                    "denoiseLite предназначен только для pack без Qwen2."
-            );
-        }
-
         int latentElements = MobileI2VContract.latentElementCount(
                 metadata.width,
                 metadata.height
@@ -125,14 +109,6 @@ public final class MobileI2VOrtCore {
         }
         if (guideImage == null || guideImage.length != guideElements) {
             throw new IllegalArgumentException("Неверный guide latent.");
-        }
-        if (conditioning == null
-                || conditioning.embeddings.length
-                != MobileI2VContract.TEXT_MAX_TOKENS
-                * MobileI2VContract.TEXT_CHANNELS
-                || conditioning.attentionMask.length
-                != MobileI2VContract.TEXT_MAX_TOKENS) {
-            throw new IllegalArgumentException("Неверный Lite conditioning.");
         }
 
         float[] latent = initialLatent.clone();
@@ -154,22 +130,7 @@ public final class MobileI2VOrtCore {
             int latentHeight = metadata.latentHeight();
             int latentWidth = metadata.latentWidth();
 
-            try (OnnxTensor text = OrtTensorIO.floatTensor(
-                         environment,
-                         conditioning.embeddings,
-                         new long[] {
-                                 1,
-                                 1,
-                                 MobileI2VContract.TEXT_MAX_TOKENS,
-                                 MobileI2VContract.TEXT_CHANNELS
-                         }
-                 );
-                 OnnxTensor attentionMask = OrtTensorIO.longTensor(
-                         environment,
-                         conditioning.attentionMask,
-                         new long[] {1, MobileI2VContract.TEXT_MAX_TOKENS}
-                 );
-                 OnnxTensor conditionMask = OrtTensorIO.floatTensor(
+            try (OnnxTensor conditionMask = OrtTensorIO.floatTensor(
                          environment,
                          condMask,
                          new long[] {1, metadata.sequencePositions()}
@@ -201,17 +162,17 @@ public final class MobileI2VOrtCore {
                         Map<String, OnnxTensor> inputs = Map.of(
                                 "x", x,
                                 "timestep", timestep,
-                                "y", text,
                                 "cond_mask", conditionMask,
-                                "flow_score", flowScore,
-                                "attention_mask", attentionMask
+                                "flow_score", flowScore
                         );
 
                         try (OrtSession.Result result = session.run(inputs)) {
                             OnnxValue output = result.get("noise")
-                                    .orElseThrow(() -> new IllegalStateException(
-                                            "MobileDiT не вернул noise."
-                                    ));
+                                    .orElseThrow(() ->
+                                            new IllegalStateException(
+                                                    "MobileDiT не вернул noise."
+                                            )
+                                    );
 
                             float[] noise = OrtTensorIO.copyFloatOutput(
                                     output,
