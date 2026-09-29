@@ -46,7 +46,7 @@ Classifier-free guidance:
 ## FlowMatch Euler
 
 MobileI2V uses Diffusers 0.35.2
-`FlowMatchEulerDiscreteScheduler(shift=3.0)`.
+`FlowMatchEulerDiscreteScheduler(shift=1.0)`.
 
 Deterministic update:
 
@@ -57,8 +57,8 @@ After each Euler update the first temporal latent is pinned back to
 
 For a two-step schedule under this exact scheduler:
 
-- sigmas: `[1.0, 1/112, 0.0]`
-- timesteps: `[1000.0, 1000/112]`
+- sigmas: `[1.0, 0.001, 0.0]`
+- timesteps: `[1000.0, 1.0]`
 
 The Android port and JVM tests live in
 `FlowMatchEulerScheduler.java` and `FlowMatchEulerSchedulerTest.java`.

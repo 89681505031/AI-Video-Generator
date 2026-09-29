@@ -12,7 +12,7 @@ public final class MobileI2VContract {
     public static final int TEXT_MAX_TOKENS = 300;
     public static final int TEXT_CHANNELS = 896;
     public static final float VAE_SCALE_FACTOR = 0.41407f;
-    public static final float FLOW_SHIFT = 3.0f;
+    public static final float FLOW_SHIFT = 1.0f;
     public static final float DEFAULT_FLOW_SCORE = 2.0f;
 
     private MobileI2VContract() {}

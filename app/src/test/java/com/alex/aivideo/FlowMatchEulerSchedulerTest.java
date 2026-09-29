@@ -6,14 +6,14 @@ import static org.junit.Assert.assertEquals;
 
 public class FlowMatchEulerSchedulerTest {
     @Test
-    public void twoStepScheduleMatchesDiffusers0352Shift3() {
+    public void twoStepScheduleMatchesOfficialMobileI2VShift1() {
         FlowMatchEulerScheduler scheduler = new FlowMatchEulerScheduler(2);
         assertEquals(2, scheduler.steps());
         assertEquals(1.0f, scheduler.sigma(0), 1e-6f);
-        assertEquals(1.0f / 112.0f, scheduler.sigma(1), 1e-6f);
+        assertEquals(0.001f, scheduler.sigma(1), 1e-6f);
         assertEquals(0.0f, scheduler.sigma(2), 1e-6f);
         assertEquals(1000.0f, scheduler.timestep(0), 1e-3f);
-        assertEquals(1000.0f / 112.0f, scheduler.timestep(1), 1e-3f);
+        assertEquals(1.0f, scheduler.timestep(1), 1e-3f);
     }
 
     @Test
@@ -22,7 +22,7 @@ public class FlowMatchEulerSchedulerTest {
         float[] sample = {1.0f, 2.0f};
         float[] model = {0.5f, -1.0f};
         scheduler.stepInPlace(sample, model, 0);
-        float dt = (1.0f / 112.0f) - 1.0f;
+        float dt = (0.001f) - 1.0f;
         assertEquals(1.0f + dt * 0.5f, sample[0], 1e-6f);
         assertEquals(2.0f + dt * -1.0f, sample[1], 1e-6f);
     }

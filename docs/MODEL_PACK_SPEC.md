@@ -49,7 +49,7 @@ after every Euler step.
 - 128 latent channels
 - spatial VAE downsample ×32
 - 3 temporal latent slices
-- FlowMatchEuler shift 3.0
+- FlowMatchEuler shift 1.0
 - VAE scale factor 0.41407
 
 720p uses latent `[1,128,3,23,40]`; 512×512 uses
