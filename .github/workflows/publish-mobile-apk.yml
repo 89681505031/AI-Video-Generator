@@ -1,0 +1,94 @@
+name: Publish Android APK Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - publish-mobile-apk
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ARTIFACT_ID: "11049969454"
+      RELEASE_TAG: "mobile-app-v0.1"
+      APK_NAME: "AI-Video-Mobile-v0.1.apk"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download successful APK artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" \
+            -o apk-artifact.zip
+          mkdir -p apk-artifact
+          unzip -q apk-artifact.zip -d apk-artifact
+          test -f apk-artifact/app-debug.apk
+          cp apk-artifact/app-debug.apk "$APK_NAME"
+          sha256sum "$APK_NAME" | tee apk-sha256.txt
+          ls -lh "$APK_NAME"
+
+      - name: Write release notes
+        shell: bash
+        run: |
+          APK_SHA=$(cut -d' ' -f1 apk-sha256.txt)
+          cat > release-notes.md <<EOF
+          AI Video Mobile v0.1
+
+          Android app for local MobileI2V Image-to-Video generation.
+
+          Included:
+          - one-tap model download
+          - SHA-256 verification of the 1.7 GB model pack
+          - automatic model installation
+          - 512x512 mobile generation path
+          - VAE encode -> MobileI2V -> Turbo-VAED -> H.264 MP4
+          - progress display
+          - manual ZIP install fallback
+
+          APK SHA-256: $APK_SHA
+
+          After installing the APK, tap "Скачать модель 1.7 ГБ".
+          EOF
+
+      - name: Create or update prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$APK_NAME" --clobber
+            gh release edit "$RELEASE_TAG" \
+              --title "AI Video Mobile v0.1" \
+              --notes-file release-notes.md \
+              --prerelease
+          else
+            gh release create "$RELEASE_TAG" \
+              "$APK_NAME" \
+              --title "AI Video Mobile v0.1" \
+              --notes-file release-notes.md \
+              --prerelease \
+              --target "mobile-android-v1"
+          fi
+
+      - name: Verify release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$RELEASE_TAG" \
+            --json tagName,isPrerelease,assets,url
