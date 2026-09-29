@@ -2,6 +2,12 @@ name: Mobile Lite Model Assets
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - mobile-android-v1
+    paths:
+      - "tools/generate_null_condition.py"
+      - ".github/workflows/mobile-lite-assets.yml"
 
 jobs:
   null-condition:
@@ -13,14 +19,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
 
       - name: Install CPU inference dependencies
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          python -m pip install             --index-url https://download.pytorch.org/whl/cpu             torch==2.5.1
-          python -m pip install             transformers==4.46.3             safetensors==0.4.5             numpy==1.26.4
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.5.1
+          python -m pip install transformers==4.46.3 safetensors==0.4.5 numpy==1.26.4
 
       - name: Generate official empty-prompt conditioning
         env:
