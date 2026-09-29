@@ -1,40 +1,57 @@
-# AI Video Generator
+# AI Video Generator — Android mobile branch
 
-Android-first local AI video generation experiment.
+Branch: `mobile-android-v1`
 
-## Current stage: Mobile v0.1
+## What works now
 
-This branch contains the first real Android runtime shell:
-
-- Java 17 Android app
-- automatic RAM / SoC / ABI inspection
-- adaptive mobile profile selection
+- Native Android app (Java 17)
+- RAM / SoC / ABI detection
 - ONNX Runtime Android 1.30.0
-- model-pack validation
-- GitHub Actions APK build
-- no fake AI generation
+- Image picker using Android's document provider
+- External MobileI2V model-pack installer
+- ZIP path-traversal protection
+- SHA-256 verification for every model/tokenizer file
+- Atomic model-pack replacement
+- Stage-by-stage ONNX session loader to reduce peak RAM
+- Streaming H.264/MP4 encoder based on Android MediaCodec
+- Reproducible GitHub Actions debug APK build
 
-The APK does **not** bundle large video-model weights yet.
+No fake AI video is returned while the real tensor pipeline is incomplete.
 
-Expected model-pack directory inside the app:
+## Target model
 
-`files/models/mobile_video_v1/`
+The mobile path is based on the official HUST MobileI2V architecture:
 
-Expected files:
+- lightweight ~270M denoiser
+- image-to-video
+- 17-frame clips
+- distilled low-step inference
+- Turbo-VAED decoder path
 
-- `text_encoder.onnx`
-- `video_model.onnx`
-- `vae_decoder.onnx`
-- `tokenizer.json`
+The official raw checkpoint is large and stays outside the APK. The Android app expects a converted, verified pack described in `docs/MODEL_PACK_SPEC.md`.
+
+## Current pack ID
+
+`mobile_i2v_v1`
+
+Required files:
+
+- `vae_encoder.onnx`
+- `qwen2_encoder.onnx`
+- `mobilei2v_unet.onnx`
+- `turbo_vaed.onnx`
+- tokenizer files
 - `manifest.json`
 
-## Next implementation stage
+## Next engineering step
 
-1. Select/convert a genuinely mobile video model.
-2. Add staged model loading to reduce peak RAM.
-3. Add text encoder + denoiser + VAE pipeline.
-4. Stream decoded frames instead of keeping the whole clip in RAM.
-5. Encode frames to MP4 with Android MediaCodec.
-6. Add Image-to-Video after Text-to-Video works.
+Implement the exact MobileI2V tensor contract from the official inference code:
 
-The desktop Wan2.1 1.3B setup remains a separate high-quality path; it is not copied directly into the APK.
+1. preprocess source image
+2. real Qwen2 tokenization + text embeddings
+3. image latent conditioning
+4. distilled MobileI2V denoising
+5. Turbo-VAED frame decode
+6. feed frames directly into `H264Mp4Encoder`
+
+The desktop Wan2.1 setup remains a separate high-quality path and is not copied into the APK.

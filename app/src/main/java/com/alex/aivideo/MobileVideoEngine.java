@@ -55,4 +55,25 @@ public final class MobileVideoEngine {
         }
         return true;
     }
+
+    /**
+     * Loads each ONNX graph separately and closes it immediately.
+     * This is intentionally manual, because parsing four large models on app
+     * start would create unnecessary memory pressure.
+     */
+    public String deepModelCheck() throws Exception {
+        if (!modelPackReady()) {
+            throw new IllegalStateException("Model pack ещё не установлен.");
+        }
+        return new StagedOrtRunner(modelDirectory()).validateModelFiles();
+    }
+
+    public File newOutputFile() {
+        File dir = new File(context.getExternalFilesDir(null), "generated");
+        if (!dir.exists()) {
+            //noinspection ResultOfMethodCallIgnored
+            dir.mkdirs();
+        }
+        return new File(dir, "mobilei2v_" + System.currentTimeMillis() + ".mp4");
+    }
 }

@@ -42,7 +42,7 @@ public class MainActivity extends Activity {
         engine = new MobileVideoEngine(this);
         refreshStatus();
 
-        checkButton.setOnClickListener(v -> refreshStatus());
+        checkButton.setOnClickListener(v -> runDeepCheck());
         imageButton.setOnClickListener(v -> openImagePicker());
         modelPackButton.setOnClickListener(v -> openModelPackPicker());
 
@@ -63,7 +63,7 @@ public class MainActivity extends Activity {
 
             Toast.makeText(
                     this,
-                    "Модель и изображение готовы. Следующий этап — настоящий MobileI2V inference + MediaCodec.",
+                    "Входные данные готовы. Следующий блок — подключение реальных tensor I/O MobileI2V.",
                     Toast.LENGTH_LONG
             ).show();
         });
@@ -130,6 +130,40 @@ public class MainActivity extends Activity {
                 });
             }
         }, "model-pack-installer").start();
+    }
+
+    private void runDeepCheck() {
+        if (!engine.runtimeReady()) {
+            engineStatus.setText("ONNX Runtime: ошибка");
+            return;
+        }
+        if (!engine.modelPackReady()) {
+            refreshStatus();
+            return;
+        }
+
+        engineStatus.setText("Поочерёдно проверяю ONNX-модели…");
+        generateButton.setEnabled(false);
+
+        new Thread(() -> {
+            try {
+                String report = engine.deepModelCheck();
+                runOnUiThread(() -> {
+                    engineStatus.setText(
+                            "ONNX Runtime: OK\n"
+                                    + engine.modelPackStatus()
+                                    + "\n\nГлубокая проверка:\n"
+                                    + report
+                    );
+                    generateButton.setEnabled(true);
+                });
+            } catch (Throwable e) {
+                runOnUiThread(() -> {
+                    engineStatus.setText("Ошибка проверки ONNX:\n" + e.getMessage());
+                    generateButton.setEnabled(true);
+                });
+            }
+        }, "ort-deep-check").start();
     }
 
     private void refreshStatus() {
