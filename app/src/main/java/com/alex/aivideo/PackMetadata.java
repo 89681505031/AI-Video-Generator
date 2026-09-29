@@ -73,19 +73,28 @@ public final class PackMetadata {
         if (!variant.equals("base") && !variant.equals("distilled")) {
             throw new IllegalArgumentException("variant должен быть base или distilled.");
         }
-        if (width <= 0 || height <= 0 || width % 32 != 0 || height % 32 != 0) {
-            throw new IllegalArgumentException("Размер кадра должен быть положительным и кратным 32.");
+        if (width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("Размер кадра должен быть положительным.");
         }
-        if (frames != 17) {
-            throw new IllegalArgumentException("MobileI2V v1 ожидает 17 кадров.");
+        if ((width & 1) != 0 || (height & 1) != 0) {
+            throw new IllegalArgumentException("Ширина и высота видео должны быть чётными.");
         }
-        if (latentChannels != 128) {
-            throw new IllegalArgumentException("Ожидается 128 latent-каналов.");
+        if (frames != MobileI2VContract.OUTPUT_FRAMES) {
+            throw new IllegalArgumentException(
+                    "MobileI2V v1 ожидает " + MobileI2VContract.OUTPUT_FRAMES + " кадров."
+            );
         }
-        if (vaeDownsampleRate != 32) {
-            throw new IllegalArgumentException("Ожидается VAE downsample ×32.");
+        if (latentChannels != MobileI2VContract.LATENT_CHANNELS) {
+            throw new IllegalArgumentException(
+                    "Ожидается " + MobileI2VContract.LATENT_CHANNELS + " latent-каналов."
+            );
         }
-        if (temporalLatents != (frames / 8 + 1)) {
+        if (vaeDownsampleRate != MobileI2VContract.SPATIAL_DOWNSAMPLE) {
+            throw new IllegalArgumentException(
+                    "Ожидается VAE downsample ×" + MobileI2VContract.SPATIAL_DOWNSAMPLE + "."
+            );
+        }
+        if (temporalLatents != MobileI2VContract.LATENT_TIME) {
             throw new IllegalArgumentException("Неверное число temporal latents.");
         }
         if (samplingSteps <= 0 || samplingSteps > 60) {
@@ -94,9 +103,13 @@ public final class PackMetadata {
         if (variant.equals("distilled") && samplingSteps > 4) {
             throw new IllegalArgumentException("Distilled pack не должен объявлять больше 4 шагов.");
         }
-        if (textConditioning && (textMaxLength != 300 || captionChannels != 896)) {
+        if (textConditioning
+                && (textMaxLength != MobileI2VContract.TEXT_MAX_TOKENS
+                || captionChannels != MobileI2VContract.TEXT_CHANNELS)) {
             throw new IllegalArgumentException(
-                    "Text pack должен использовать Qwen2 max_length=300 и 896 каналов."
+                    "Text pack должен использовать Qwen2 max_length="
+                            + MobileI2VContract.TEXT_MAX_TOKENS
+                            + " и " + MobileI2VContract.TEXT_CHANNELS + " каналов."
             );
         }
         if (sourceCommit.isEmpty()) {
@@ -104,28 +117,35 @@ public final class PackMetadata {
         }
 
         File nullCondition = new File(dir, "null_condition.bin");
-        long expectedNullBytes = 1L * 1L * 300L * 896L * 2L; // FP16
+        long expectedNullBytes =
+                1L * 1L * MobileI2VContract.TEXT_MAX_TOKENS
+                        * MobileI2VContract.TEXT_CHANNELS * 2L;
         if (!nullCondition.isFile() || nullCondition.length() != expectedNullBytes) {
             throw new IllegalArgumentException(
-                    "null_condition.bin должен быть FP16 [1,1,300,896] ("
+                    "null_condition.bin должен быть FP16 [1,1,"
+                            + MobileI2VContract.TEXT_MAX_TOKENS + ","
+                            + MobileI2VContract.TEXT_CHANNELS + "] ("
                             + expectedNullBytes + " байт)."
             );
         }
 
         return new PackMetadata(
-                variant,
-                width,
-                height,
-                frames,
-                latentChannels,
-                vaeDownsampleRate,
-                temporalLatents,
-                samplingSteps,
-                textConditioning,
-                textMaxLength,
-                captionChannels,
-                sourceCommit
+                variant, width, height, frames, latentChannels, vaeDownsampleRate,
+                temporalLatents, samplingSteps, textConditioning, textMaxLength,
+                captionChannels, sourceCommit
         );
+    }
+
+    public int latentWidth() {
+        return MobileI2VContract.latentWidth(width);
+    }
+
+    public int latentHeight() {
+        return MobileI2VContract.latentHeight(height);
+    }
+
+    public int sequencePositions() {
+        return MobileI2VContract.sequencePositions(width, height);
     }
 
     public String summary() {
@@ -135,8 +155,9 @@ public final class PackMetadata {
         String prompt = textConditioning ? "текст: да" : "текст: Lite/без Qwen2";
         return speed + "\n"
                 + width + "×" + height + " • " + frames + " кадров • " + prompt
-                + "\nlatent: 128×" + temporalLatents + "×"
-                + (height / vaeDownsampleRate) + "×" + (width / vaeDownsampleRate);
+                + "\nlatent: " + latentChannels + "×" + temporalLatents + "×"
+                + latentHeight() + "×" + latentWidth()
+                + " • positions=" + sequencePositions();
     }
 
     private static byte[] readAll(File file, int maxBytes) throws Exception {
