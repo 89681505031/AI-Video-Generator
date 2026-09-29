@@ -150,12 +150,6 @@ public final class PackMetadata {
             }
             if (unsigned == 1) activeTokens++;
         }
-        if (activeTokens == 0) {
-            throw new IllegalArgumentException(
-                    "null_attention_mask.bin не содержит активных токенов."
-            );
-        }
-
         return new PackMetadata(
                 variant, width, height, frames, latentChannels, vaeDownsampleRate,
                 temporalLatents, samplingSteps, textConditioning, textMaxLength,

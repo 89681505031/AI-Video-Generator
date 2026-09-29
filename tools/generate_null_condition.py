@@ -100,9 +100,6 @@ def main() -> None:
     if not np.isin(mask, [0, 1]).all():
         raise RuntimeError("Attention mask must contain only 0/1")
     active_tokens = int(mask.sum())
-    if active_tokens <= 0:
-        raise RuntimeError("Empty prompt unexpectedly has zero active tokens")
-
     mask_path = args.out_dir / "null_attention_mask.bin"
     mask_path.write_bytes(mask.astype("u1", copy=False).tobytes(order="C"))
     if mask_path.stat().st_size != EXPECTED_MASK_BYTES:

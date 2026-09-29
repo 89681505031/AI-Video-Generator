@@ -25,6 +25,7 @@ public final class ModelPackInstaller {
             "mobilei2v_transformer.onnx",
             "video_decoder.onnx",
             "null_condition.bin",
+            "null_attention_mask.bin",
             "runtime.json",
             "manifest.json"
     };
@@ -88,6 +89,11 @@ public final class ModelPackInstaller {
         JSONObject manifest = new JSONObject(manifestText);
         if (!PACK_ID.equals(manifest.optString("pack_id"))) {
             throw new IllegalArgumentException("Неверный pack_id. Нужен " + PACK_ID + ".");
+        }
+        if (manifest.optInt("format_version", -1) != FORMAT_VERSION) {
+            throw new IllegalArgumentException(
+                    "Нужен format_version=" + FORMAT_VERSION + "."
+            );
         }
 
         JSONObject files = manifest.optJSONObject("files");
