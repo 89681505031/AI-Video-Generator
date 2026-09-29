@@ -66,7 +66,17 @@ def check_source_compatibility(root: Path, width: int, height: int) -> None:
                 "Use the official distillation branch for 512x512 export."
             )
 
-    if "self.cross_attn(x, y" in text.replace("#", ""):
+    active_cross_attention = False
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if (
+            "self.cross_attn(x, y" in stripped
+            and not stripped.startswith("#")
+        ):
+            active_cross_attention = True
+            break
+
+    if active_cross_attention:
         raise SystemExit(
             "Cross-attention appears active in this source tree. "
             "Android v4 is prompt-free; export a new pack format instead."
