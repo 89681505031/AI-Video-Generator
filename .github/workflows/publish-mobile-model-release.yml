@@ -1,0 +1,89 @@
+name: Publish Mobile Model Release
+
+on:
+  push:
+    branches:
+      - mobile-model-release-publish
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ARTIFACT_ID: "11049992875"
+      MODEL_FILE: "mobile_i2v_v1_512_base30_turbo.zip"
+      MODEL_SHA256: "b293b0d49d387b24d9b9e791f341df418048bdb89a177b42f05191295309c02b"
+      RELEASE_TAG: "mobile-model-v0.1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download successful model artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" \
+            -o model-artifact.zip
+          unzip -q model-artifact.zip
+          test -f "$MODEL_FILE"
+          echo "$MODEL_SHA256  $MODEL_FILE" | sha256sum -c -
+          ls -lh "$MODEL_FILE"
+
+      - name: Write release notes
+        shell: bash
+        run: |
+          cat > release-notes.md <<EOF
+          MobileI2V Android model pack v0.1
+
+          Profile: 512x512
+          Model: public MobileI2V base checkpoint
+          Sampling: 30 FlowEuler steps
+          Decoder: Turbo-VAED-LTX
+          Pack format: v4
+          SHA-256: $MODEL_SHA256
+
+          This model pack is installed separately from the Android APK.
+          The current official MobileI2V graph is Image-to-Video; prompt
+          conditioning is disabled in this pack because upstream cross-attention
+          is not active in the exported graph.
+          EOF
+
+      - name: Create or update prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$MODEL_FILE" --clobber
+            gh release edit "$RELEASE_TAG" \
+              --title "MobileI2V Android Model v0.1" \
+              --notes-file release-notes.md \
+              --prerelease
+          else
+            gh release create "$RELEASE_TAG" \
+              "$MODEL_FILE" \
+              --title "MobileI2V Android Model v0.1" \
+              --notes-file release-notes.md \
+              --prerelease \
+              --target "mobile-android-v1"
+          fi
+
+      - name: Verify release asset
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$RELEASE_TAG" \
+            --json tagName,isPrerelease,assets,url
