@@ -32,6 +32,23 @@ public final class ModelPackInstaller {
     private ModelPackInstaller() {}
 
     public static File install(Context context, Uri zipUri) throws Exception {
+        File localZip = ModelRelease.downloadFile(context);
+        boolean sameDownloadedFile = false;
+        try {
+            Uri expected = Uri.fromFile(localZip);
+            sameDownloadedFile = expected.equals(zipUri);
+        } catch (Throwable ignored) {
+        }
+        if (!sameDownloadedFile) {
+            verifyCurrentReleaseUri(context, zipUri);
+        }
+        return installVerifiedCurrent(context, zipUri);
+    }
+
+    public static File installVerifiedCurrent(
+            Context context,
+            Uri zipUri
+    ) throws Exception {
         File modelsRoot = new File(context.getFilesDir(), "models");
         if (!modelsRoot.exists() && !modelsRoot.mkdirs()) {
             throw new IllegalStateException("Не удалось создать папку моделей.");
@@ -63,6 +80,7 @@ public final class ModelPackInstaller {
                 throw new IllegalStateException("Не удалось активировать новый model pack.");
             }
 
+            ModelRelease.markInstalled(target);
             deleteRecursively(backup);
             return target;
         } catch (Exception e) {
@@ -139,6 +157,36 @@ public final class ModelPackInstaller {
         }
 
         return metadata;
+    }
+
+    private static void verifyCurrentReleaseUri(
+            Context context,
+            Uri uri
+    ) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        byte[] buffer = new byte[1024 * 1024];
+
+        try (InputStream raw = context.getContentResolver().openInputStream(uri)) {
+            if (raw == null) {
+                throw new IllegalArgumentException("Не удалось открыть ZIP.");
+            }
+            try (BufferedInputStream in = new BufferedInputStream(raw)) {
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    digest.update(buffer, 0, read);
+                }
+            }
+        }
+
+        StringBuilder actual = new StringBuilder(64);
+        for (byte b : digest.digest()) {
+            actual.append(String.format("%02x", b & 0xff));
+        }
+        if (!ModelRelease.SHA256.equals(actual.toString())) {
+            throw new SecurityException(
+                    "Этот ZIP не является текущим model pack v0.2."
+            );
+        }
     }
 
     private static void extractZipSafely(

@@ -36,6 +36,9 @@ public final class MobileVideoEngine {
 
     public PackMetadata metadataOrNull() {
         try {
+            if (!ModelRelease.isCurrentInstalled(modelDirectory())) {
+                return null;
+            }
             return ModelPackInstaller.validatePack(modelDirectory());
         } catch (Exception ignored) {
             return null;
@@ -50,7 +53,10 @@ public final class MobileVideoEngine {
 
         try {
             PackMetadata metadata = ModelPackInstaller.validatePack(dir);
-            return "MobileI2V pack: OK\n" + metadata.summary();
+            if (!ModelRelease.isCurrentInstalled(dir)) {
+                return "MobileI2V pack устарел. Скачайте исправленную модель v0.2.";
+            }
+            return "MobileI2V pack v0.2: OK\n" + metadata.summary();
         } catch (Exception e) {
             return "Model pack не прошёл проверку:\n" + e.getMessage();
         }
@@ -75,6 +81,11 @@ public final class MobileVideoEngine {
             Uri sourceImage,
             ProgressListener progress
     ) throws Exception {
+        if (!ModelRelease.isCurrentInstalled(modelDirectory())) {
+            throw new IllegalStateException(
+                    "Установленная модель устарела. Скачайте MobileI2V v0.2."
+            );
+        }
         PackMetadata metadata = ModelPackInstaller.validatePack(
                 modelDirectory()
         );

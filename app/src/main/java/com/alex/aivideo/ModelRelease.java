@@ -7,9 +7,12 @@ import android.os.StatFs;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
 public final class ModelRelease {
+    public static final String INSTALL_MARKER = ".model_release_sha256";
     public static final String FILE_NAME =
             "mobile_i2v_v2_512_base30_turbo.zip";
 
@@ -53,6 +56,40 @@ public final class ModelRelease {
             throw new IllegalStateException(
                     "Для модели нужно минимум 5 ГБ свободного места."
             );
+        }
+    }
+
+    public static boolean isCurrentInstalled(File modelDir) {
+        File marker = new File(modelDir, INSTALL_MARKER);
+        if (!marker.isFile()) {
+            return false;
+        }
+        try {
+            byte[] data = new byte[(int) marker.length()];
+            try (FileInputStream in = new FileInputStream(marker)) {
+                int offset = 0;
+                while (offset < data.length) {
+                    int read = in.read(data, offset, data.length - offset);
+                    if (read < 0) break;
+                    offset += read;
+                }
+                if (offset != data.length) return false;
+            }
+            String value = new String(data, StandardCharsets.UTF_8).trim();
+            return SHA256.equals(value);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    public static void markInstalled(File modelDir) throws Exception {
+        if (modelDir == null || !modelDir.isDirectory()) {
+            throw new IllegalArgumentException("Папка установленной модели не найдена.");
+        }
+        File marker = new File(modelDir, INSTALL_MARKER);
+        try (FileOutputStream out = new FileOutputStream(marker, false)) {
+            out.write((SHA256 + "\n").getBytes(StandardCharsets.UTF_8));
+            out.getFD().sync();
         }
     }
 
