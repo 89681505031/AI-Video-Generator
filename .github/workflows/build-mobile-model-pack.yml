@@ -1,0 +1,129 @@
+name: Build MobileI2V 512 Model Pack
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-model-pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free runner disk
+        shell: bash
+        run: |
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          df -h
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install CPU export environment
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            torch==2.4.0 torchvision==0.19.0 \
+            --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install \
+            diffusers==0.35.2 \
+            transformers==4.46.0 \
+            huggingface-hub==0.34.0 \
+            safetensors==0.6.2 \
+            timm==1.0.20 \
+            einops==0.8.1 \
+            mmcv==1.7.2 \
+            mmengine==0.10.7 \
+            pyrallis==0.3.1 \
+            omegaconf==2.3.0 \
+            termcolor==3.1.0 \
+            addict==2.4.0 \
+            yapf==0.43.0 \
+            onnx==1.17.0 \
+            accelerate==1.1.0
+
+      - name: Clone official model sources
+        shell: bash
+        run: |
+          mkdir -p external
+          git clone --depth 1 --branch distillation \
+            https://github.com/hustvl/MobileI2V.git \
+            external/MobileI2V
+          git clone --depth 1 \
+            https://github.com/hustvl/Turbo-VAED.git \
+            external/Turbo-VAED
+
+      - name: Download public model weights
+        shell: bash
+        run: |
+          python - <<'PY'
+          from huggingface_hub import hf_hub_download, snapshot_download
+
+          hf_hub_download(
+              repo_id="hustvl/MobileI2V",
+              filename="hybrid_371.pth",
+              local_dir="external/mobilei2v-weights",
+          )
+          hf_hub_download(
+              repo_id="hustvl/Turbo-VAED",
+              filename="Turbo-VAED-LTX.pth",
+              local_dir="external/turbo-weights",
+          )
+          snapshot_download(
+              repo_id="Lightricks/LTX-Video",
+              allow_patterns=[
+                  "vae/config.json",
+                  "vae/diffusion_pytorch_model.safetensors",
+              ],
+              local_dir="external/ltx-video",
+          )
+          PY
+          du -sh external/*
+
+      - name: Export 512 ONNX graphs
+        shell: bash
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          mkdir -p build/mobilei2v-512
+          python tools/export_mobilei2v_onnx.py \
+            --mobilei2v-root external/MobileI2V \
+            --checkpoint external/mobilei2v-weights/hybrid_371.pth \
+            --vae external/ltx-video/vae \
+            --turbo-vaed-root external/Turbo-VAED \
+            --turbo-config external/Turbo-VAED/configs/Turbo-VAED-LTX.json \
+            --turbo-checkpoint external/turbo-weights/Turbo-VAED-LTX.pth \
+            --out-dir build/mobilei2v-512 \
+            --profile 512 \
+            --variant base \
+            --sampling-steps 30 \
+            --dtype fp32
+
+      - name: Verify ONNX contract
+        shell: bash
+        run: |
+          python tools/verify_mobile_onnx.py build/mobilei2v-512
+          cat build/mobilei2v-512/runtime.json
+
+      - name: Package phone model
+        shell: bash
+        run: |
+          python tools/package_mobile_model.py \
+            build/mobilei2v-512 \
+            --out mobile_i2v_v1_512_base30_turbo.zip
+          sha256sum mobile_i2v_v1_512_base30_turbo.zip
+          ls -lh mobile_i2v_v1_512_base30_turbo.zip
+
+      - name: Upload model pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-i2v-512-base30-turbo
+          path: mobile_i2v_v1_512_base30_turbo.zip
+          compression-level: 0
+          retention-days: 7
