@@ -48,6 +48,9 @@ jobs:
         with:
           gradle-version: "9.6.0"
 
+      - name: Validate Python tooling syntax
+        run: python3 -m py_compile tools/*.py
+
       - name: Unit tests and debug APK
         run: gradle :app:testDebugUnitTest :app:assembleDebug --stacktrace
 
