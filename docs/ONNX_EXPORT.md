@@ -82,3 +82,31 @@ This first exporter preserves the official PyTorch graph. It does **not** yet
 perform mobile quantization or replace the LTX decoder with Turbo-VAED.
 Those optimizations are separate stages and must be benchmarked against the
 same exported contract rather than assumed to be lossless.
+
+
+## Turbo-VAED-LTX decoder
+
+The official Turbo-VAED LTX configuration uses 128 latent channels, matching
+MobileI2V/LTX latents. To export a mobile-oriented decoder while keeping the
+original LTX encoder:
+
+```bash
+python tools/export_mobilei2v_onnx.py \
+  --mobilei2v-root /path/to/MobileI2V \
+  --checkpoint /path/to/mobilei2v_checkpoint.pth \
+  --vae /path/to/video-vae \
+  --turbo-vaed-root /path/to/Turbo-VAED \
+  --turbo-config /path/to/Turbo-VAED/configs/Turbo-VAED-LTX.json \
+  --turbo-checkpoint /path/to/turbo_ltx_decoder.ckpt \
+  --out-dir build/mobilei2v-512 \
+  --profile 512 \
+  --variant distilled \
+  --sampling-steps 2
+```
+
+All three Turbo arguments are required together. The exporter loads the
+checkpoint into `AutoencoderKLTurboVAED.decoder`, exactly matching the
+official Turbo-VAED validation path, while the VAE encoder remains LTX.
+
+The resulting `runtime.json` records `"decoder": "turbo-vaed-ltx"` and the
+Turbo decoder checkpoint SHA-256.

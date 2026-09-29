@@ -130,19 +130,19 @@ class VaeEncoderWrapper(torch.nn.Module):
 class VideoDecoderWrapper(torch.nn.Module):
     def __init__(
         self,
-        vae: torch.nn.Module,
+        decoder_model: torch.nn.Module,
         scale_factor: float,
         target_height: int,
         target_width: int,
     ):
         super().__init__()
-        self.vae = vae
+        self.decoder_model = decoder_model
         self.scale_factor = scale_factor
         self.target_height = target_height
         self.target_width = target_width
 
     def forward(self, latent: torch.Tensor) -> torch.Tensor:
-        decoded = self.vae.decode(
+        decoded = self.decoder_model.decode(
             latent / self.scale_factor,
             return_dict=False,
         )[0]
@@ -231,6 +231,79 @@ def load_vae(
     return vae.eval().to(device=device, dtype=dtype)
 
 
+def load_turbo_vaed_ltx(
+    turbo_root: Path,
+    config_path: Path,
+    checkpoint_path: Path,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.nn.Module:
+    if not turbo_root.is_dir():
+        raise SystemExit(f"Turbo-VAED root not found: {turbo_root}")
+    if not config_path.is_file():
+        raise SystemExit(f"Turbo-VAED config not found: {config_path}")
+    if not checkpoint_path.is_file():
+        raise SystemExit(f"Turbo-VAED checkpoint not found: {checkpoint_path}")
+
+    sys.path.insert(0, str(turbo_root))
+
+    try:
+        from diffusers_vae.src.diffusers.models.autoencoders.autoencoder_kl_turbo_vaed import (
+            AutoencoderKLTurboVAED,
+        )
+    except ImportError as exc:
+        raise SystemExit(
+            "Could not import AutoencoderKLTurboVAED from the supplied "
+            "Turbo-VAED source tree."
+        ) from exc
+
+    config = json.loads(config_path.read_text("utf-8"))
+    if int(config.get("latent_channels", -1)) != 128:
+        raise SystemExit(
+            "Turbo-VAED-LTX config must use latent_channels=128."
+        )
+
+    model = AutoencoderKLTurboVAED.from_config(config=config)
+    checkpoint = torch.load(
+        checkpoint_path,
+        map_location="cpu",
+        weights_only=False,
+    )
+
+    # Official validation_videos.py loads the checkpoint directly into decoder.
+    state = checkpoint
+    if isinstance(checkpoint, dict):
+        if "state_dict" in checkpoint and isinstance(checkpoint["state_dict"], dict):
+            state = checkpoint["state_dict"]
+        if "decoder" in checkpoint and isinstance(checkpoint["decoder"], dict):
+            state = checkpoint["decoder"]
+
+    missing, unexpected = model.decoder.load_state_dict(
+        state,
+        strict=False,
+    )
+
+    # Some training checkpoints may contain auxiliary alignment heads; decoder
+    # export is valid as long as decoder parameters themselves are covered.
+    critical_missing = [
+        key for key in missing
+        if key.startswith(("conv_", "up_blocks", "mid_block", "decoder."))
+    ]
+    if critical_missing:
+        raise SystemExit(
+            "Turbo-VAED decoder checkpoint is missing critical keys: "
+            + ", ".join(critical_missing[:20])
+        )
+
+    if unexpected:
+        print(
+            "Turbo-VAED checkpoint contains extra keys (ignored):",
+            ", ".join(unexpected[:20]),
+        )
+
+    return model.eval().to(device=device, dtype=dtype)
+
+
 def export_graph(
     module: torch.nn.Module,
     args: tuple[torch.Tensor, ...],
@@ -261,6 +334,9 @@ def main() -> None:
     ap.add_argument("--mobilei2v-root", type=Path, required=True)
     ap.add_argument("--checkpoint", type=Path, required=True)
     ap.add_argument("--vae", type=Path, required=True)
+    ap.add_argument("--turbo-vaed-root", type=Path)
+    ap.add_argument("--turbo-config", type=Path)
+    ap.add_argument("--turbo-checkpoint", type=Path)
     ap.add_argument("--out-dir", type=Path, required=True)
     ap.add_argument(
         "--profile",
@@ -280,6 +356,19 @@ def main() -> None:
     checkpoint = args.checkpoint.resolve()
     vae_path = args.vae.resolve()
     out_dir = args.out_dir.resolve()
+
+    turbo_args = [
+        args.turbo_vaed_root,
+        args.turbo_config,
+        args.turbo_checkpoint,
+    ]
+    if any(value is not None for value in turbo_args) and not all(
+        value is not None for value in turbo_args
+    ):
+        raise SystemExit(
+            "Turbo decoder requires all three: --turbo-vaed-root, "
+            "--turbo-config and --turbo-checkpoint"
+        )
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if not checkpoint.is_file():
@@ -377,8 +466,21 @@ def main() -> None:
         ["posterior_moments"],
     )
 
+    decoder_source = "ltx"
+    decoder_model = vae
+
+    if args.turbo_vaed_root is not None:
+        decoder_source = "turbo-vaed-ltx"
+        decoder_model = load_turbo_vaed_ltx(
+            args.turbo_vaed_root.resolve(),
+            args.turbo_config.resolve(),
+            args.turbo_checkpoint.resolve(),
+            device,
+            dtype,
+        )
+
     decoder = VideoDecoderWrapper(
-        vae,
+        decoder_model,
         scale_factor=0.41407,
         target_height=height,
         target_width=width,
@@ -420,6 +522,12 @@ def main() -> None:
         "latent_height": latent_h,
         "latent_width": latent_w,
         "sequence_positions": positions,
+        "decoder": decoder_source,
+        "turbo_decoder_checkpoint_sha256": (
+            sha256(args.turbo_checkpoint.resolve())
+            if args.turbo_checkpoint is not None
+            else None
+        ),
     }
     (out_dir / "runtime.json").write_text(
         json.dumps(runtime, indent=2) + "\n",
