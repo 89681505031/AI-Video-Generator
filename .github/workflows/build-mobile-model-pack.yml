@@ -2,6 +2,9 @@ name: Build MobileI2V 512 Model Pack
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - mobile-model-pack-build
 
 jobs:
   build-model-pack:
