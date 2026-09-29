@@ -1,6 +1,7 @@
 package com.alex.aivideo;
 
 import java.io.File;
+import java.nio.FloatBuffer;
 import java.util.Map;
 import java.util.Set;
 
@@ -11,9 +12,6 @@ import ai.onnxruntime.OrtSession;
 
 /**
  * Real ONNX Runtime core for official MobileI2V.
- *
- * Upstream MobileDiT currently has cross-attention disabled, so the exported
- * denoiser graph depends only on x, timestep, cond_mask and flow_score.
  */
 public final class MobileI2VOrtCore {
     private static final Set<String> VAE_INPUTS = Set.of("image");
@@ -26,6 +24,9 @@ public final class MobileI2VOrtCore {
             "flow_score"
     );
     private static final Set<String> DENOISER_OUTPUTS = Set.of("noise");
+
+    private static final Set<String> DECODER_INPUTS = Set.of("latent");
+    private static final Set<String> DECODER_OUTPUTS = Set.of("video");
 
     private final OrtEnvironment environment;
     private final StagedOrtRunner runner;
@@ -93,7 +94,8 @@ public final class MobileI2VOrtCore {
     public float[] denoise(
             float[] initialLatent,
             float[] guideImage,
-            PackMetadata metadata
+            PackMetadata metadata,
+            Progress progress
     ) throws Exception {
         int latentElements = MobileI2VContract.latentElementCount(
                 metadata.width,
@@ -142,6 +144,10 @@ public final class MobileI2VOrtCore {
                  )) {
 
                 for (int step = 0; step < scheduler.steps(); step++) {
+                    if (progress != null) {
+                        progress.onStep(step, scheduler.steps());
+                    }
+
                     try (OnnxTensor x = OrtTensorIO.floatTensor(
                                  environment,
                                  latent,
@@ -193,6 +199,130 @@ public final class MobileI2VOrtCore {
 
             return latent;
         });
+    }
+
+    public void decodeToMp4(
+            float[] latent,
+            PackMetadata metadata,
+            File outputFile,
+            FrameProgress progress
+    ) throws Exception {
+        int expectedLatent = MobileI2VContract.latentElementCount(
+                metadata.width,
+                metadata.height
+        );
+        if (latent == null || latent.length != expectedLatent) {
+            throw new IllegalArgumentException("Неверный final latent.");
+        }
+
+        runner.withSession("video_decoder.onnx", session -> {
+            requireContract(
+                    session,
+                    DECODER_INPUTS,
+                    DECODER_OUTPUTS,
+                    "Video decoder"
+            );
+
+            long[] latentShape = {
+                    1,
+                    MobileI2VContract.LATENT_CHANNELS,
+                    MobileI2VContract.LATENT_TIME,
+                    metadata.latentHeight(),
+                    metadata.latentWidth()
+            };
+
+            try (OnnxTensor input = OrtTensorIO.floatTensor(
+                    environment,
+                    latent,
+                    latentShape
+            )) {
+                try (OrtSession.Result result =
+                             session.run(Map.of("latent", input))) {
+                    OnnxValue output = result.get("video")
+                            .orElseThrow(() -> new IllegalStateException(
+                                    "Video decoder не вернул video."
+                            ));
+
+                    if (!(output instanceof OnnxTensor)) {
+                        throw new IllegalStateException(
+                                "Decoder output не является tensor."
+                        );
+                    }
+
+                    FloatBuffer video =
+                            ((OnnxTensor) output).getFloatBuffer();
+                    if (video == null) {
+                        throw new IllegalStateException(
+                                "Decoder output должен быть FP32 для pack v4."
+                        );
+                    }
+
+                    int expectedVideoElements =
+                            3
+                                    * MobileI2VContract.OUTPUT_FRAMES
+                                    * metadata.width
+                                    * metadata.height;
+
+                    if (video.capacity() < expectedVideoElements) {
+                        throw new IllegalStateException(
+                                "Decoder output содержит "
+                                        + video.capacity()
+                                        + " float-элементов, ожидалось >= "
+                                        + expectedVideoElements
+                        );
+                    }
+
+                    int bitrate = Math.max(
+                            2_000_000,
+                            Math.min(
+                                    12_000_000,
+                                    metadata.width
+                                            * metadata.height
+                                            * MobileI2VContract.OUTPUT_FPS
+                            )
+                    );
+
+                    try (H264Mp4Encoder encoder = new H264Mp4Encoder(
+                            outputFile,
+                            metadata.width,
+                            metadata.height,
+                            MobileI2VContract.OUTPUT_FPS,
+                            bitrate
+                    )) {
+                        for (int frame = 0;
+                             frame < MobileI2VContract.OUTPUT_FRAMES;
+                             frame++) {
+                            byte[] rgba = VideoTensorFrames.readRgbaFrame(
+                                    video,
+                                    frame,
+                                    MobileI2VContract.OUTPUT_FRAMES,
+                                    metadata.width,
+                                    metadata.height
+                            );
+                            encoder.writeRgbaFrame(rgba);
+
+                            if (progress != null) {
+                                progress.onFrame(
+                                        frame + 1,
+                                        MobileI2VContract.OUTPUT_FRAMES
+                                );
+                            }
+                        }
+                        encoder.finish();
+                    }
+                }
+            }
+
+            return null;
+        });
+    }
+
+    public interface Progress {
+        void onStep(int stepIndex, int totalSteps);
+    }
+
+    public interface FrameProgress {
+        void onFrame(int frameNumber, int totalFrames);
     }
 
     private static void requireContract(

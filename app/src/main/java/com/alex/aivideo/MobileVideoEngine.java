@@ -1,12 +1,17 @@
 package com.alex.aivideo;
 
 import android.content.Context;
+import android.net.Uri;
 
 import java.io.File;
 
 import ai.onnxruntime.OrtEnvironment;
 
 public final class MobileVideoEngine {
+    public interface ProgressListener {
+        void onProgress(int percent, String stage);
+    }
+
     private final Context context;
 
     public MobileVideoEngine(Context context) {
@@ -23,7 +28,10 @@ public final class MobileVideoEngine {
     }
 
     public File modelDirectory() {
-        return new File(context.getFilesDir(), "models/" + ModelPackInstaller.PACK_ID);
+        return new File(
+                context.getFilesDir(),
+                "models/" + ModelPackInstaller.PACK_ID
+        );
     }
 
     public PackMetadata metadataOrNull() {
@@ -53,8 +61,7 @@ public final class MobileVideoEngine {
     }
 
     public boolean supportsPrompt() {
-        PackMetadata metadata = metadataOrNull();
-        return metadata != null && metadata.textConditioning;
+        return false;
     }
 
     public String deepModelCheck() throws Exception {
@@ -64,12 +71,133 @@ public final class MobileVideoEngine {
         return new StagedOrtRunner(modelDirectory()).validateModelFiles();
     }
 
-    public File newOutputFile() {
-        File dir = new File(context.getExternalFilesDir(null), "generated");
-        if (!dir.exists()) {
-            //noinspection ResultOfMethodCallIgnored
-            dir.mkdirs();
+    public File generate(
+            Uri sourceImage,
+            ProgressListener progress
+    ) throws Exception {
+        PackMetadata metadata = ModelPackInstaller.validatePack(
+                modelDirectory()
+        );
+
+        if (sourceImage == null) {
+            throw new IllegalArgumentException(
+                    "Исходное изображение не выбрано."
+            );
         }
-        return new File(dir, "mobilei2v_" + System.currentTimeMillis() + ".mp4");
+
+        // v4 decoder output is a full FP32 NCTHW tensor in native ORT memory.
+        // Restrict the first phone-ready implementation to 512-class outputs
+        // so a 720p decoder cannot unexpectedly reserve ~188 MB just for output.
+        if (metadata.width * metadata.height > 512 * 512) {
+            throw new IllegalStateException(
+                    "Этот pack слишком тяжёлый для первого мобильного decoder path. "
+                            + "Нужен 512×512 mobile pack."
+            );
+        }
+
+        emit(progress, 2, "Подготовка изображения");
+        float[] image = ImageTensorPreprocessor.loadNcthw(
+                context,
+                sourceImage,
+                metadata.width,
+                metadata.height
+        );
+
+        long seed = System.nanoTime();
+        MobileI2VOrtCore core = new MobileI2VOrtCore(modelDirectory());
+
+        emit(progress, 10, "VAE encode");
+        float[] guide = core.encodeGuideImage(
+                image,
+                metadata,
+                seed
+        );
+        image = null;
+
+        emit(progress, 20, "Создание latent");
+        float[] latent = LatentInitializer.createConditionedNoise(
+                metadata.width,
+                metadata.height,
+                seed ^ 0x5DEECE66DL,
+                guide
+        );
+
+        emit(progress, 25, "MobileI2V");
+        latent = core.denoise(
+                latent,
+                guide,
+                metadata,
+                (step, total) -> {
+                    int pct = 25 + Math.round(
+                            55.0f * (step + 1) / Math.max(1, total)
+                    );
+                    emit(
+                            progress,
+                            pct,
+                            "MobileI2V шаг "
+                                    + (step + 1)
+                                    + "/"
+                                    + total
+                    );
+                }
+        );
+        guide = null;
+
+        File output = newOutputFile();
+        emit(progress, 82, "Декодирование видео");
+
+        core.decodeToMp4(
+                latent,
+                metadata,
+                output,
+                (frame, total) -> {
+                    int pct = 82 + Math.round(
+                            17.0f * frame / Math.max(1, total)
+                    );
+                    emit(
+                            progress,
+                            Math.min(99, pct),
+                            "MP4 кадр "
+                                    + frame
+                                    + "/"
+                                    + total
+                    );
+                }
+        );
+
+        emit(progress, 100, "Готово");
+        return output;
+    }
+
+    public File newOutputFile() {
+        File base = context.getExternalFilesDir(null);
+        if (base == null) {
+            base = context.getFilesDir();
+        }
+
+        File dir = new File(base, "generated");
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new IllegalStateException(
+                    "Не удалось создать папку generated."
+            );
+        }
+
+        return new File(
+                dir,
+                "mobilei2v_" + System.currentTimeMillis() + ".mp4"
+        );
+    }
+
+    private static void emit(
+            ProgressListener listener,
+            int percent,
+            String stage
+    ) {
+        if (listener != null) {
+            listener.onProgress(
+                    Math.max(0, Math.min(100, percent)),
+                    stage
+            );
+        }
     }
 }

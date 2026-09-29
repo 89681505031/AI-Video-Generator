@@ -9,6 +9,8 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
+
 public class MainActivity extends Activity {
     private static final int REQ_IMAGE = 1001;
     private static final int REQ_MODEL_PACK = 1002;
@@ -45,38 +47,66 @@ public class MainActivity extends Activity {
         checkButton.setOnClickListener(v -> runDeepCheck());
         imageButton.setOnClickListener(v -> openImagePicker());
         modelPackButton.setOnClickListener(v -> openModelPackPicker());
+        generateButton.setOnClickListener(v -> generateVideo());
+    }
 
-        generateButton.setOnClickListener(v -> {
-            PackMetadata metadata = engine.metadataOrNull();
-            if (metadata == null) {
-                Toast.makeText(
-                        this,
-                        "Сначала установите проверенный MobileI2V model pack.",
-                        Toast.LENGTH_LONG
-                ).show();
-                return;
-            }
-
-            if (selectedImageUri == null) {
-                Toast.makeText(
-                        this,
-                        "Сначала выберите исходное изображение.",
-                        Toast.LENGTH_SHORT
-                ).show();
-                return;
-            }
-
-            String mode = metadata.variant.equals("distilled")
-                    ? "DISTILLED " + metadata.samplingSteps + "-step"
-                    : "BASE " + metadata.samplingSteps + "-step";
-
+    private void generateVideo() {
+        PackMetadata metadata = engine.metadataOrNull();
+        if (metadata == null) {
             Toast.makeText(
                     this,
-                    mode + " pack и изображение готовы. "
-                            + "Официальный граф пока работает как Image→Video без prompt.",
+                    "Сначала установите проверенный MobileI2V model pack.",
                     Toast.LENGTH_LONG
             ).show();
-        });
+            return;
+        }
+
+        if (selectedImageUri == null) {
+            Toast.makeText(
+                    this,
+                    "Сначала выберите исходное изображение.",
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+
+        generateButton.setEnabled(false);
+        engineStatus.setText("0% • Запуск генерации");
+
+        new Thread(() -> {
+            try {
+                File output = engine.generate(
+                        selectedImageUri,
+                        (percent, stage) -> runOnUiThread(() ->
+                                engineStatus.setText(
+                                        percent + "% • " + stage
+                                )
+                        )
+                );
+
+                runOnUiThread(() -> {
+                    engineStatus.setText(
+                            "100% • Видео готово\n" + output.getAbsolutePath()
+                    );
+                    generateButton.setEnabled(true);
+                    Toast.makeText(
+                            this,
+                            "Видео создано на телефоне.",
+                            Toast.LENGTH_LONG
+                    ).show();
+                });
+            } catch (Throwable e) {
+                runOnUiThread(() -> {
+                    engineStatus.setText(
+                            "Ошибка генерации:\n"
+                                    + (e.getMessage() == null
+                                    ? e.getClass().getSimpleName()
+                                    : e.getMessage())
+                    );
+                    generateButton.setEnabled(true);
+                });
+            }
+        }, "mobilei2v-generation").start();
     }
 
     private void openImagePicker() {
@@ -124,7 +154,6 @@ public class MainActivity extends Activity {
                     );
                 }
             } catch (SecurityException ignored) {
-                // Some providers grant access only for the current process.
             }
 
             imageStatus.setText("Изображение выбрано:\n" + uri);
@@ -218,6 +247,8 @@ public class MainActivity extends Activity {
                 "Текущий официальный MobileI2V: prompt не используется"
         );
 
-        generateButton.setEnabled(ort);
+        generateButton.setEnabled(
+                ort && engine.modelPackReady()
+        );
     }
 }
